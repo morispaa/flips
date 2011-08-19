@@ -1,0 +1,3 @@
+exportPattern("^flips.")
+export(FLIPS)
+export(read.bw)

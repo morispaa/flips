@@ -1,0 +1,51 @@
+#
+# ./configure should guess the correct 
+#
+# IBM XLF
+# FC=f95
+# CPP=cpp -P -Wtraditional -DF2003_STREAM
+# FFLAGS=-O5 -qunroll -qhot=arraypad -qhot=vector -qipa=level=2 -qxlf90=noautodealloc
+# FFLAGS=-O3
+# FFLAGS=-pg -g
+
+# This is for compiling static flipseng for G4 machine in G5
+#
+# CPP=cpp -P -Wtraditional -DF2003_STREAM
+# FC=xlf -F/Users/morispaa/xlf/etc/xlf.cfg:xlf90_s
+# FFLAGS=-O5 -qunroll -qhot=arraypad -qhot=vector -qipa=level=2 -qxlf90=noautodealloc -qarch=ppcv
+
+# XLF SMP
+#
+# FC=xlf95_r
+# CPP=cpp -P -Wtraditional -DF2003_STREAM
+# FFLAGS=-qsuffix=f=f95 -qsmp=auto -O5 -qthreaded -qnosave
+
+# G95
+#
+# FC=g95
+# CPP=cpp -P -Wtraditional
+# CPPFLAGS= -DF2003_STREAM
+# FFLAGS= -O3 
+
+# Intel Mac
+#
+# FC=ifort
+# CPP=cpp -P -Wtraditional
+# CPPFLAGS= -DDIRECT
+# FFLAGS= -O3 -assume byterecl
+
+# gfortran 4.2.0
+#
+# FC=/usr/local/bin/gfortran
+# CPP=cpp -P -Wtraditional
+# CPPFLAGS= -DF2003_STREAM
+# FFLAGS= -O3 -ftree-vectorize -ftree-vectorizer-verbose=5 -msse2 -std=f2003
+
+#
+# autoconf template
+#
+FC=@FC@
+CPP=@FCPP@
+CPPFLAGS=@CPPFLAGS@
+FFLAGS=@FCFLAGS@
+M4FLAGS=@M4FLAGS@

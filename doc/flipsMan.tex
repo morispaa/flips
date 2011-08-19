@@ -1,0 +1,1764 @@
+\documentclass[a4paper,twoside]{refrep}
+ 
+ %\usepackage{enumitem}
+ %\usepackage{geometry}
+ \usepackage{textcomp}
+ %\usepackage{times}
+ %\usepackage{mathptmx}
+ %\usepackage{pifont}
+ \usepackage{amsmath}
+ \usepackage{amsfonts}
+ 
+
+ \usepackage[T1]{fontenc} 
+ \usepackage{textcomp}    
+ \usepackage{mathptmx}    
+ \usepackage[scaled=.92]{helvet}
+ \usepackage{courier}     
+ 
+ %\usepackage{bera}
+ 
+ \usepackage[latin1]{inputenc}
+ \usepackage[english]{babel}
+ 
+ \usepackage{delarray}
+ 
+ %\usepackage{grtimes}
+   %\usepackage{txfonts}
+
+ 
+\newcommand{\code}[1]{{\tt #1}}
+\newcommand{\aitem}[1]{\item[{\tt #1}]}
+\newcommand{\marl}[1]{\marginlabel{\em #1}}
+
+\newcommand{\ml}[1]{\marginlabel{{\bf #1}}}
+\newcommand{\ve}{\varepsilon}
+\newcommand{\Ran}{\operatorname{Ran}}
+\newcommand{\R}{{\mathbb R}}
+ 
+\newenvironment{arglist}
+	{\begin{description}}
+	{\end{description}}
+ 
+ 
+\title{FLIPS Manual\\
+	for version 2.0\\[2cm]
+	{\Large Copyright \textcopyright\ 2006--2009 University of Oulu}\\
+	{\Large Licensed under freeBSD License}}
+	
+\author{Written by Mikko Orisp\"a\"a\\
+	{\tt mikko.orispaa@oulu.fi}} 
+
+\date{}
+ 
+ 
+ \begin{document}
+
+\begin{fullpage}
+\maketitle
+\end{fullpage}
+
+
+{\Large\bfseries FLIPS (Fortran Linear Inverse Problem Solver)}
+
+Copyright 2005-2009 University of Oulu, Finland. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, 
+are permitted provided that the following conditions are met:
+\begin{enumerate}
+   \item Redistributions of source code must retain the above copyright notice, this 
+      list of conditions and the following disclaimer.
+   \item Redistributions in binary form must reproduce the above copyright notice, this list 
+      of conditions and the following disclaimer in the documentation and/or other materials 
+      provided with the distribution.
+\end{enumerate}
+
+\begin{flushleft}
+THIS SOFTWARE IS PROVIDED BY THE UNIVERSITY OF OULU ``AS IS'' AND ANY EXPRESS OR IMPLIED 
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE UNIVERSITY OF OULU 
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS 
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The views and conclusions contained in the software and documentation are those of 
+the authors and should not be interpreted as representing official policies, either 
+expressed or implied, of the University of Oulu.
+\end{flushleft}
+
+%\newpage
+
+\tableofcontents
+
+\part{FLIPS Implementation}
+
+\chapter{Introduction}\label{intro}
+
+FLIPS (Fortran Linear Inverse Problem Solver) is a Fortran 95 module for solving large scale linear inverse problems of the form
+\begin{equation}\label{mainequ}
+m=Ax+\varepsilon,
+\end{equation}
+where $m$ is a $N$-vector called \emph{the measurement}, $A$ is a $N\times M$-matrix called \emph{the direct theory matrix}, $x$ is a $M$-vector called \emph{the unknown} and $\varepsilon$ is (an optional Gaussian) $N$-vector called \emph{the error}.\seealso{See section \ref{glipdef}}
+
+FLIPS solves the problem by transforming it into a simpler form which is then easy and fast to solve. Namely, the equation \eqref{mainequ} is transformed into the form
+\begin{equation}\label{Requ}
+Y=R\cdot x,
+\end{equation}
+where $R$ is a $M\times M$ upper triagonal matrix (called \emph{the target matrix}), and $Y$ and $x$ are $M$-vectors. Vector $Y$ is called \emph{the target vector}. Equation \eqref{Requ} is numerically fast to solve using backsubstitution.\seealso{See chapter \ref{flipsimp}}
+
+Apart from just solving the linear problems, FLIPS is also able to marginalize away and add unknowns to the linear problem without affecting the remaining unknowns or their posteriori covariance.\seealso{See section \ref{margi}} For real-valued problems it is also possible to delete data that has been already fed into the problem. \seealso{See section \ref{deletion}}
+  
+FLIPS is able to use either the computer memory or binary files to store the problem data. Using binary files is slower than using memory, but makes it possible to solve very large problems. Also the total memory consumption is kept as low as possible. Only the target matrix and vector are stored. The direct theory matrix, measurements and errors can be fed into FLIPS in small chunks or even row-by-row. They are not needed afterwards and can be discarded.
+
+%The current version (1.0) has been compiled and tested with IBM XL Fortran (Mac OS X \& AIX) and with free Fortran 95 compiler g95 (Mac OS X \& Linux). FLIPS uses some Fortran 2003 extensions, namely the stream I/O and allocatable elements in structured data types. If either of these are not supported by the used compilier, it is not possible compile FLIPS at the moment. There \emph{will} be a (more) strictly Fortran 95 compliant version of FLIPS in the future, but at the moment XLF and g95 are the only two compiliers that are throughly tested.
+
+
+The structure of this manual is the following:
+
+In Chapter 2 the general linear inverse problem is defined and its formal solution is given.
+
+In Chapter 3 the implementation of FLIPS is discussed and the way FLIPS solves the problems is explained.
+
+The second part of the manual consists of the reference manual, in which the FLIPS commands are explained. Also, some simple example programs are given and explained.
+
+The third part of the manual consists of technical notes and instructions of how to compile the FLIPS module and use it in user's own Fortran programs.
+
+
+\chapter{General Linear Inverse Problem}\label{glip}
+
+\section{Definition}\label{glipdef}
+
+We define here the \emph{real valued} inverse problem. The complex one is defined accordingly.
+
+A general linear inverse problem can be presented as a matrix equation
+\begin{equation}\label{genprob}
+m = A\cdot x + \varepsilon,
+\end{equation}
+where $m\in{\mathbf R}^M$, $A\in{\mathbf R}^{M\times N}$, $x\in{\mathbf R}^N$ and $\varepsilon\in{\mathbf R}^N$. Here (and from now on) $m$ is called the measurement, $A$ is called the direct theory matrix, $\varepsilon$ is called the error and $x$ is called the unknown. The problem is to find either the exact or best possible value for the unknown $x$.
+
+Depending on the integers $M$ and $N$ and the characteristics of the error $\varepsilon$, there are different possibilities:
+
+If $M=N$ and the values of $m$ and $\ve$ are known (in this case we can put $\ve=0$ without loss of generality), we have a linear system with $N$ equations. If $A$ is invertible, i.e.\ $\det(A)\neq0$, the system has an unique solution.
+
+If $A$ is singular, i.e.\ $\det(A)=0$, its kernel is non-zero. In this case $m$ either is or is not in the range of $A$. If $m\in\Ran(A)$, then the system has more than one solution. However, it is possible to find the shortest vector in the solution space. On the other hand, if $m\not\in\Ran(A)$, the system does not have an exact solution at all. In this case, it is possible to give "solution" in the least squares sense, i.e., as the vector $\hat{x}$ that minimizes the norm $\|A\cdot\hat{x}-m\|$.
+
+If $M<N$ and the values of $m$ and $\ve$ are known (again, we can put $\ve=0$), we have a linear system with less equations than unknowns. In other words, the system is underdetermined. This problem can be reduced to the previous one by expanding matrix $A$ and vector $m$ with $N-M$ zero rows and elements, respectively. The resulting matrix $A$ will be singular, and the type of the approximate solution depends again if $m$ is in the range of $A$ or not.
+
+If $M>N$ and the values of $m$ and $\ve$ ($\ve=0$) are known, the system is overdetermined, unless $A$ is row-degenerate in such a way that the system reduces to one of the above ones. Overdetermined system has the solution only in the least squares sense.
+
+If $m$ is known and $\ve$ is not, but its components are random variables with a known joint distribution function, we have what will be called \emph{a linear stochastic inverse problem}. In this case, the solution is given by the joint posteriori distribution of the unknowns. However, usually it is enough to obtain the \emph{maximum a posteriori estimate (MAP)} and the posteriori (co)variances of the unknowns. 
+
+FLIPS is able to solve all above problem types with Gaussian errors. It is able to give the MAP estimates of the unknowns and their posteriori covariance matrix. Note however that solving underdetermined problems with FLIPS requires some extra work from the user part, as some kind of regularization scheme is needed.
+
+
+
+\section{Formal Solution}\label{glipfs}
+
+Without (too much) remorse, we skip most of the mathematical details in what follows, and refer to standard  mathematical and stochastic literature\footnote{See, for example, Kaipio \& Somersalo, \emph{Statistical and Computational Inverse Problems}, Springer, 2004.}.
+
+As defined in the last section, the general stochastic linear inverse problem is to find ''the best possible'' solution to the equation
+\[
+m=A\cdot x + \ve,
+\]
+where matrix $A$ is a known direct theory matrix, and the components of the vectors $m$, $x$ and $\ve$ are random variables. Broadly speaking, this means finding out what kind of information about $x$ can be obtained when the measurement $m$ is fixed and the (statistical) distribution of $\ve$ is known.
+
+In the most general sense, the solution is given as the \emph{posteriori density} of $x$, which is the conditional density of $x$ when the measurement $m$ is fixed. For this, it is necessary to know the distribution function of the error $\ve$. Estimations of error variances can be obtained, for example, by repeating the measurement several times. Then if the mean values of the measurements are used as $m$, the density of errors $\ve$ can be approximated by Gaussian distribution (using the central limit theorem). 
+
+If no \emph{a priori} information about $x$ is available, the posteriori density is given by formula
+\[
+\pi(x|m) = C \exp\left\{-\frac{1}{2}\left(m - A\cdot x\right)^{T}
+\cdot\Sigma^{-1}\cdot\left(m - A\cdot x\right)\right\},
+\]
+where $C$ is a normalization coefficient and $\Sigma$ is the \emph{error covariance matrix}, defined by
+\[
+\Sigma = \langle \ve\cdot\ve^{T} \rangle.
+\]
+
+It is (quite) easy to show that the above posteriori density can be written as
+\[
+\pi(x|m) = C\exp\left\{-\frac{1}{2}\left[
+(x-x_0)^{T}\cdot Q \cdot (x-x_0) + \chi^2 \right]\right\},
+\]
+where
+\begin{gather*}
+Q = A^T \cdot \Sigma^{-1}\cdot A,\\
+x_0 = Q^{-1}\cdot A^{T}\cdot\Sigma^{-1}\cdot m,\\
+\chi^2 = m^{T}\cdot\Sigma^{-1}\cdot m - x_0^{T}\cdot Q\cdot x_0.
+\end{gather*}
+
+The matrix $Q$ above is called the \emph{Fisher information matrix}, and it is (as is $\Sigma$) positively definite and symmetric. Hence, the exponential function gets it maximum value $-\chi^2 /2$ at point $x=x_0$, so $x_0$ is the maximum point of the posteriori density. The width of the distribution is determined by the inverse of $Q$, $Q^{-1}=\Sigma_{x}$, which is called the \emph{posteriori error covariance matrix}. We can therefore say that the solution to the original inverse problem is given by $x_0$ and $\Sigma_{x}$. The scalar (or vector) $\chi^2$ is the smallest value (at $x=x_0$) of the quadratic form $(m-A\cdot x)^T\cdot\Sigma^{-1}\cdot(m-A\cdot x)$, and it is called the \emph{residual of the solution}, since it gives some information how well $x_0$ approximates $x$.
+
+If, in addition, we have \emph{a priori} information of the unknown $x$ which can be approximated by a Gaussian distribution
+\[
+\pi(x) = C_0 \exp\left\{ -\frac{1}{2}(x-\bar{x}_0)^T\cdot \Sigma_0^{-1}\cdot (x-\bar{x}_0)\right\},
+\]
+where $\bar{x}_0$ are the prior values and $\Sigma_0$ is the prior covariance matrix of $x$, they can be added easily to the formal solution formulae, namely,
+\begin{gather*}
+Q = \Sigma_0^{-1} + A^T\cdot \Sigma^{-1} \cdot A,\\
+x_0 = Q^{-1}\left( \Sigma_0^{-1}\cdot\bar{x}_0 + A^T\cdot \Sigma^{-1}\cdot m\right).
+\end{gather*}
+
+
+\chapter{FLIPS Implementation}\label{flipsimp}
+
+\section{FLIPS algorithm}
+The formal solution presented in the previous section could be used to solve the linear inverse problem. However, if the matrix $A$ is large, the process involves inversions of large matrices and soon becomes unpractical. FLIPS uses different approach, and utilizes a sequence of elementary rotations to transform the problem into a simpler one.
+
+First step is to ''eliminate'' the error covariance matrix by transforming the original problem in such a way that the error covariance is transformed into a unit matrix\footnote{This is also called ''the whitening of the noise'' as normally distributed noise with unit covariance matrix is usually called ''white noise''.}. Note that then it can be discarded from the formal solution formulae. This is done in the following way: Covariance matrix $\Sigma$ is real symmetric and positive definite, so it can be decomposed using Cholesky decomposition, i.e.,
+\[
+\Sigma = C\cdot C^T,
+\] 
+where $C$ is a lower triangular matrix. By setting the first transformation matrix
+\[
+U_0 = C^{-1},
+\]
+the transformed equation will be
+\[
+m_0 = A_0\cdot x + \ve_0, 
+\]
+where $m_0 = U_0\cdot m$, $A_0 = U_0\cdot A$ and $\ve_0 = U_0\cdot \ve$. Then the transformed covariance matrix will be
+\begin{align*}
+\Sigma_0 & = \langle \ve_0\cdot\ve_0\rangle\\
+& = \langle C^{-1}\cdot\ve\cdot(C^{-1}\cdot\ve)^T\rangle\\
+& = C^{-1}\cdot\langle\ve\cdot\ve^T\rangle\cdot (C^{-1})^T\\
+& = C^{-1}\cdot\Sigma\cdot (C^T)^{-1}\\
+& = C^{-1}\cdot C\cdot C^T \cdot (C^T)^{-1}\\
+& = I,
+\end{align*}
+where $I$ denotes the unit matrix.
+
+\attention Note that the current version of FLIPS can only use diagonal error covariance matrices\footnote{The R and MATLAB interfaces for FLIPS can handle also non-diagonal error covariance matrices. Fortran user might want to do this by hand using linear algebra libraries like LAPACK or ATLAS. This will probably change in the future versions of FLIPS.}. In this special case the Cholesky decomposition is simply
+\[
+\Sigma = \Sigma^{1/2}\cdot(\Sigma^{1/2})^T.
+\]
+
+%\section{Givens Rotations}\label{givrot}
+
+After this, the new theory matrix $A_0$ is transformed into a upper triangular one by using so called \emph{Givens rotations}. Givens rotations can be used to zero single elements in a matrix. It is carried out by using a transformation matrix of the form
+\[
+\begin{matrix}
+& \begin{matrix} \phantom{\cdots aa} & i &\phantom{\cdots aaa} &\phantom{aa} j & \phantom{\cdots} \end{matrix} \\
+\begin{matrix} \phantom{\vdots} \\ i \\ \phantom{\vdots}\\ j \\ \phantom{\vdots}\end{matrix} &
+\begin{pmatrix} 1 & \vdots & \phantom{\cdots} & \vdots & \phantom{\cdots} \\
+\cdots & \cos(\phi) & \cdots & \sin(\phi) & \cdots \\
+\phantom{\cdots} & \vdots & 1 & \vdots & \phantom{\cdots} \\
+\cdots & -\sin(\phi) & \cdots & \cos(\phi) & \cdots \\
+\phantom{\cdots} & \vdots & \phantom{\vdots} & \vdots & 1 \end{pmatrix}
+\end{matrix},
+\]
+where all diagonal elements except elements $(i,i)$ and $(j,j)$ are ones, and all off-diagonal elements except elements $(i,j)$ and $(j,i)$ are zeros. This is a rotation matrix that rotates the $i,j$-coordinate plane by an angle $\phi$. Let us denote this matrix as $U_{ji}$.
+
+To zero out the $(j,i)$-element of the theory matrix $A$ (let us denote it by $a_{ji}$), we apply the rotation $U_{ji}$ with angle $\phi$ calculated from the formulae
+\begin{eqnarray}
+\cos(\phi) &= \frac{a_{ii}}{\sqrt{a_{ii}^2 + a_{ji}^2}}\\
+\sin(\phi) &= \frac{a_{ji}}{\sqrt{a_{ii}^2 + a_{ji}^2}}.
+\end{eqnarray}
+Note that since only $\cos(\phi)$ and $\sin(\phi)$ are needed, there is no need to actually solve the angle $\phi$ from the above equations. After the transformation, the resulting matrix, say $A_t$, 
+\begin{equation}
+A_t = U_{ij}\cdot A,
+\end{equation}
+will have a zero as the $(j,i)$-element. If it happens that $a_{ii}=a_{jj}=0$, the rotation is just skipped. Note that also the measurement vector $m$ must be transformed using the same rotation matrix $U_{ji}$.
+
+\attention The noteworthy thing about the above transformation is that only the $i$'th and $j$'th rows of the matrix $A$ are affected. The other rows will stay intact.
+
+The sequence of the rotations FLIPS performs is the following:
+
+Let us assume that the theory matrix $A$ has $N$ columns, in other words, there are $N$ unknowns in the linear system.
+
+\begin{enumerate}
+\item The first row of the direct theory matrix $A$ is moved as the first row of the target matrix $R$.
+\item The second row of $A$ is then rotated with the first row of $R$. After the rotation, the first element of the second row of $A$ is zero. The rotated row is moved as the second row of $R$.
+\item The third row of $A$ is first rotated with the first row of $R$, which will zero out the first element of the third row. After this the rotated third row is rotated again with the second row of $R$, which will zero out the second element of the third row. Now the first two elements are zero. It is then moved to the third row of $R$.
+\item The consequent data rows are rotated in the similar manner starting from the first row of $R$, and they are afterwards moved to the target matrix $R$.
+\item The $N^{th}$ row of $A$ will have only one non-zero element after the rotations, and it will be moved to the last row of $R$. The target matrix $R$ will now be upper triangular.
+\item If there are still more theory matrix rows (i.e.\ the system is overdetermined), they are rotated with all rows of $R$. After the rotations, these rows will contain only zeros, and they are discarded. 
+\end{enumerate}
+
+\attention Note that also the measurement vector elements are rotated in the same way as the theory matrix rows resulting what is called the target vector $Y$.
+
+After all the rows of $A$ are rotated into the target matrix and target vector, we are left with an equation
+\[
+Y = R\cdot x,
+\] 
+where $Y$ is a $N$-dimensional vector and $R$ is a $N\times N$ upper triangular matrix. This equation is is easy to solve using backsubstitution.
+
+\attention Note that if there are less equations (rows) than unknowns (columns) in the theory vector $A$, the resulting $R$ will be degenerate. If one wants to solve underdetermined problems with FLIPS, some kind of regularization is required!
+
+\attention Note also, that the problem data can be entered into FLIP row-by-row (or as many rows at the time as required) and that the data is not needed anymore after the rotations are made. Also, FLIPS only stores target vector $Y$ and target matrix $R$ which are always of fixed size (depending only on the number of unknowns). 
+
+\section{Marginalizing unknowns}\label{margi}
+
+Another powerful property of FLIPS is the ability to marginalize away any number of unknowns without affecting the remaining unknowns or their posteriori covariance. It is also possible to add new unknowns to a system at any time.
+
+It is fairly easy to show\footnote{I will get back to this!} that it is possible to remove rows and columns from the target matrix without affecting the remaining problem as long as they are removed beginning from the upper left corner. For example, if we have a problem with 20 unknowns and we want to marginalize the 5 first unknowns from the problem, we can just discard first 5 rows and columns from the target matrix, and the remaining 15 unkowns together their posteriori covariances are not affected.
+
+It is also possible to marginalize away unknowns which are not at the beginning (index-wise). In this case FLIPS permutates the target matrix columns so that the unknowns to be marginalized are moved to the left. FLIPS then uses resulting matrix (which is no more upper triangular) as a new theory matrix which it rotates again to get an upper triangular target matrix with unknowns to be marginalized in the left. After this, the rows and columns can be removed.
+
+It is also possible to add new unknowns at the end (index-wise) of the target matrix. In this case, FLIPS just adds new columns and rows (containing zeros) to the target matrix.
+
+\attention The marginalizing and/or adding unknowns can be done at any time.
+
+\section{Deletion of data}\label{deletion}
+
+For real-valued\footnote{This might be possible also for complex-valued problems. However, it needs further research.} problems FLIPS allows the deletion of already fed-in data rows. This is implemented by what we call \emph{the antirotations}. Antirotations are a modification of Givens rotations and they are defined as follows:
+
+\begin{equation}
+\begin{pmatrix}
+c_{a} & -s_{a} \\-s_{a} & c_{a} 
+\end{pmatrix}
+\begin{pmatrix}
+f \\ g
+\end{pmatrix}=
+\begin{pmatrix}
+r\\0
+\end{pmatrix},
+\end{equation}
+where the antirotation coefficients $c_{a}\in\R$ and $s_{a}\in\R$ are determined by the equations
+\begin{equation}
+\left\{
+\begin{matrix}  c_a^{2} - s_a^{2} & = 1, \\  gc_a - fs_a & = 0, \end{matrix}\right.
+\end{equation}
+and $f,g,r\in\R$. For consistency with real Givens rotations, we choose 
+\begin{align}
+c_a &= \frac{f}{\sqrt{f^2 - g^2}},\\
+s_a &= \frac{g}{\sqrt{f^2 - g^2}}\\
+\intertext{and}
+r &= \sqrt{f^2 - g^2} .
+\end{align}
+Note that we have to assume that $|f| > |g|$ in order to $c_a,s_a,r\in{\mathbb R}$. This restriction is, however, always fulfilled if we only try  to delete data that have been previously fed in, as seen below.  
+
+To show that antirotations delete the data previously fed in, first apply the Givens rotation $G(1,2,\theta)$ to a real vector $F = (f\:g)^T$, $f,g\in{\mathbb R}$, $f,g\neq 0$, i.e.
+\begin{equation}
+G(1,2,\theta)F =
+\begin{pmatrix} \cos(\theta) & \sin(\theta) \\
+-\sin(\theta) & \cos(\theta) \end{pmatrix}
+\begin{pmatrix}f \\ g \end{pmatrix} = \begin{pmatrix}r \\ 0 \end{pmatrix}, \quad r =\sqrt{f^2 + g^2}.
+\end{equation}
+If we now want to delete the effect of $g$ in the rotated element $r$, we apply the antirotation to the vector $G=( r\:g)^T$ (note that always $|r|>|g|$ ), which yields
+\begin{equation}
+\begin{pmatrix}
+c_a & -s_a \\ -s_a & c_a
+\end{pmatrix}
+\begin{pmatrix}
+r \\ g
+\end{pmatrix}
+=
+\begin{pmatrix}
+\tilde{r} \\ 0
+\end{pmatrix},
+\end{equation}
+where
+\begin{equation}
+\tilde{r} = \sqrt{r^2 - g^2} = \sqrt{\left(\sqrt{f^2 + g^2}\right)^2 - g^2} = |f|.
+\end{equation}
+Losing the sign of $f$ above does not matter, since we want to keep the diagonal of the target matrix $R$ positive.
+
+Antirotations are implemented in FLIPS by making the antirotations between the rows of the target matrix $R$ and the data row to be deleted. This adds another limitation to the use of antirotations: the target matrix must be a full upper-triangular matrix before deleting any data row from it. In other words, the FLIPS problem must be overdetermined before deletion.
+
+
+
+\section{Memory and file storages}\label{storage}
+
+By default, FLIPS uses the computer memory to store the data needed (target matrix and vector, for example) to solve the problem. However, it is also possible to use the computer hard disk to store this data, if so required. Using file storage is considerably slower, so it shouldn't be used unless really needed, for example, if the problem does not fit in the computer memory, or there is a need to save the problem data for future reference. Note however, that it is possible to change the data storage method at any time.
+
+\attention The binary file storage was originally written using Stream I/O extension of Fortran 2003, which some of the current Fortran 90/95 compilers support. If the used compiler does not support \seealso{See Section \ref{f2003ext}}Stream I/O extension, it is advisable to avoid using binary file storage as the alternative file I/O (Direct Access) tends to be extremely slow on most platforms!
+
+\attention The band matrices and common variables are not implemented for file storage problems (for time being)!
+
+\section{Band matrices}\label{band}
+
+In many problems (like deconvolution, finite-difference method, etc.) the theory matxi $A$ is not full, but more or less band-structured. In these cases, also the resulting target matrix is band-structured. For large problems this would mean of storing a huge number of zeros as FLIPS stores the upper triangular part of the target matrix. However, the user has the option to use band-structured target matrix. If the maximum band of the theory matrix is known, it can be given to the FLIPS when the problem is initialised. If it is not known in advance, the user can give any band size and FLIPS will resize itself if the given size is too small. This resizing is only done on-demand and for large problems it can decrease the speed performance of FLIPS. On the other hand, it can save huge amounts of memory, if the maximum band-size of the theory matrix is relatively small compared to the total number of unknowns.
+
+\section{Common variables}\label{cv}
+
+There are lot of problems, where the theory matrix is ``almost'' band-structured but there are some unknowns that contribute to many of the single measurements. In other words, the theory matrix is of form
+\begin{equation}
+A = \begin{pmatrix}
+B & F
+\end{pmatrix},
+\end{equation}
+where $B$ is a band-structured matrix and $F$ is a full matrix with (relatively) small number of columns. In FLIPS the unknowns corresponding to the columns of the matrix $F$ can be declared as \emph{common variables}. They are handled separately from the unknowns corresponding to the band-structured part $B$. This saves computer memory as the excess zeros are not stored, and improves the performance as the trivial zeros are not rotated with each other. The number of common variables can be given when the FLIPS problem is initialised. The number of common variables can not be changed directly after the initialisation.
+
+
+\part{Command Reference}
+
+\chapter{Global Variables}
+
+FLIPS has some global variables, although their number is tried to be kept as small as possible. 
+
+\section*{FLIPS Global Variables}
+
+\marginlabel{{\bf NUMERICAL PRECISION}}
+
+\begin{arglist}
+\aitem{sp} Integer; holds the single precision kind number
+\aitem{dp} Integer; holds the double precision kind number
+\end{arglist}
+
+\attention The single and double precision sizes can vary on different platforms. Hence, it is advisable to use above kind parameters when declaring real and complex variables. This way they are assured to be compatible with FLIPS.
+
+\marginlabel{{\bf MISCELLANEOUS VARIABLES}}
+
+\vspace*{12pt}
+
+\begin{arglist}
+\aitem{defbufsize} Integer; default buffer size. Currently this is set to 100. \emph{May change or be omitted in the future!}
+\aitem{verbose} Logical; default is .FALSE.. This is an experimental flag for printing extra info on standard output when using FLIPS. Used mainly for debugging. \emph{Not fully implemented!}
+\end{arglist}
+
+%\section{Numerical Precision}
+
+
+\chapter{FLIPS Structured Data types}
+FLIPS module defines four structured data types. Every problem needs its own data type, although they can be reused if wanted. FLIPS data types contain all the information that FLIPS needs to solve the given problem.
+
+The defined data types are:
+\begin{arglist}
+\aitem{flips\_s} Data type for single precision real problem
+\aitem{flips\_d} Data type for double precision real problem
+\aitem{flips\_c} Data type for single precision complex problem
+\aitem{flips\_z} Data type for double precision complex problem
+\end{arglist}
+
+\section*{The structure of {\tt flips\_s}}
+Other data types are defined accordingly with obvious changes.
+
+\marginlabel{{\bf FLAGS}} Logical variables, mainly used internally
+
+\begin{arglist}
+\aitem{cplx} Logical; flag for real/complex (obviously .FALSE.)
+\aitem{dbl} Logical; flag for single/double precision (.FALSE.)
+\aitem{use\_files} Logical; flag for memory/binary file storage
+\aitem{solexists} Logical; flag for the existence of the solution
+\aitem{rinverted} Logical; flag for the existence of the inverse of target matrix $R$
+\aitem{covexists} Logical; flag for the existence of the posteriori covariance matrix
+\aitem{fullcov} Logical; flag for diagonal/full posteriori covariance matrix
+\end{arglist}
+
+\marginlabel{{\bf PROBLEM SIZE}} Integer variables keeping track of the problem size
+\begin{arglist}
+\aitem{nrotbuf} Integer; number of rows in the rotation buffers
+\aitem{ncols} Integer; number of unknowns
+\aitem{nrhs} Integer; number of columns in the measurement matrix
+\aitem{nbuf} Integer; number of rows currently in the rotation buffers
+\aitem{nrows} Integer; number of (rotated) rows in the target matrix $R$
+\aitem{bw} Integer; current $R$ matrix bandwidth
+\aitem{bbw} Integer; current maximum bandwidth of the rotation buffer
+\aitem{common} Integer; number of common variables
+\end{arglist}
+
+\marginlabel{{\bf MEMORY STORAGE}} Real arrays used to hold the data when memory storage is used\footnote{Rotation buffers and residual calculation vectors are used also when using binary file storage.}
+
+\begin{arglist}
+%\aitem{rst} Integer, dimension($ncols$); indices of the first non-zero elements in $R$ matrix (row-by-row)
+%\aitem{rle} Integer, dimension($ncols$); indices of the last non-zero elements in $R$ matrix (row-by-row)
+%\aitem{bst} Integer, dimension($ncols$); indices of the first non-zero elements in rotation buffer (row-by-row)
+%\aitem{ble} Integer, dimension($ncols$); indices of the last non-zero elements in rotation buffer (row-by-row)
+\aitem{rmat} Real(single), dimension(:); real vector holding the target matrix $R$ stored in row-major format
+\aitem{cvmat} Real(single), dimension(:); real vector holding the common variable part of the target matrix (if common variables exist)
+\aitem{ymat} Real(single), dimension(:); real vector holding the target vector $Y$
+\aitem{arotbuf} Real(single), dimension(:); real vector containing the theory matrix rotation buffer
+\aitem{mrotbuf} Real(single), dimension(:); real vector containing the measurement data rotation buffer
+\aitem{invrmat} Real(single), dimension(:); real vector containing the inverse of $R$ (after it is calculated) in row-major format
+\aitem{cmat} Real(single), dimension(:); real vector containing the upper triangular part posteriori covariance matrix \emph{or} the diagonal of it (depending which one is calculated)
+\aitem{solmat} Real(single), dimension(:); real vector containing the solution (after it has been calculated)
+\aitem{residual} Real(single), dimension(:); real vector containing the residual(s) of the solution (calculated together with the solution)
+\aitem{tmpres} Real(single), dimension(:); real vector used for residual calculation (used internally)
+\end{arglist}
+
+\marginlabel{{\bf BINARY FILE STORAGE}} These are used only if binary file storage is used
+
+\begin{arglist}
+\aitem{idnum} Integer; ID number of the problem. Used for constructing filenames.
+\aitem{rfile} Character string; holds the filename of target matrix $R$
+\aitem{yfile} Character string; holds the filename of target vector $Y$ 
+\aitem{cfile} Character string; holds the filename of posteriori covariance matrix
+\aitem{irfile} Character string; holds the filename of the inverse of $R$
+\aitem{solfile} Character string; holds the filename of the solution vector/matrix
+\aitem{rfileunit} Integer; holds the unit number of target matrix file 
+\aitem{yfileunit} Integer; holds the unit number of target vector file 
+\aitem{cfileunit} Integer; holds the unit number of posteriori covariance file 
+\aitem{irfileunit} Integer; holds the unit number of inverse of $R$ file 
+\aitem{solfileunit} Integer; holds the unit number of the solution vector/matrix file 
+
+\end{arglist}
+
+\marginlabel{{\bf MISC VARIABLES}}
+\begin{arglist}
+\aitem{fc} Real(single), scalar; variable holding the (estimated) number of flops (floating point operations) used by current problem. NB: Not reliable anymore!%\footnote{Only available in real data types {\tt flips\_s} and {\tt flips\_d}.}
+\aitem{zeroth} Real(single), scalar; zero threshold. Theory matrix elements whose absolute value is less than \verb!zeroth! are treated as zeros.
+\aitem{rst} Integer, dimension($ncols$); Indices of first non-zero elements in $R$ matrix rows.
+\aitem{rle} Integer, dimension($ncols$); Indices of last non-zero elements in $R$ matrix rows.
+\aitem{bst} Integer, dimension($nbuf$); Indices of first non-zero elements in rotation buffer rows.
+\aitem{ble} Integer, dimension($nbuf$); Indices of last non-zero elements in rotation buffer rows.
+
+\end{arglist}
+
+
+Usually, these variables are not needed by the user, because FLIPS contains necessary routines to handle them. 
+
+\attention Not all of the above variables are allocated when the data type is initialised: 
+\begin{itemize}
+\item \code{cmat} and \code{invrmat} are first allocated when the posteriori covariance is calculated (memory storage).
+\item Binary files for posteriori covariance matrix and the inverse of the target matrix are created when posteriori covariance matrix is calculated (binary file storage).
+\item Binary file for the solution is created when the solution is calculated (binary file storage).
+\end{itemize} 
+
+\chapter{FLIPS commands}
+
+\section{flips\_init}
+
+initialises the FLIPS data type.
+
+\subsection*{SYNTAX}
+\code{call flips\_init(ftype,ncol,nrhs,bandwidth,common,\\
+\phantom{call flips\_init(}idnum,buffersize,zerothreshold)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type, uninitialised
+\aitem{ncol} integer; number of unknowns, i.e.\ number of columns in the direct theory matrix.
+\aitem{nrhs} integer; number of alternate measurements, i.e.\ number of columns in the measurement matrix.
+\aitem{bandwidth} integer, optional; initial bandwidth of the theory matrix. Default is $ncol$, i.e., the theory matrix is considered full. For bandwidth limited problems setting this argument low can lead to huge improvements in memory consumption. On the other hand, if the bandwidth is set too low, it will be automatically increased when necessary, which can lead to slower performance. Bandwidth argument can only be given for memory storage problems.
+\aitem{common} Integer, optional; number of common variables. Default is zero.
+\aitem{idnum} integer, optional; ID number of the problem. If given, binary file storage is used and binary files are identified by the ID number. 
+\aitem{buffersize} integer, optional; number of rows in the rotation buffers. Default value is used, if this is omitted.
+\aitem{zerothreshold} real, optional. Threshold below which the elements in theory matrix are treated as zeros, i.e.\ all elements in theory matrix whose absolute value is less than \verb!zerothreshold! are given to FLIPS as zero. Default value is $10^{-10}$ for both single and double precision.% and $10^{-10}$ for double precision.
+\end{arglist}
+
+\subsection*{RULES}
+
+Any FLIPS data type must be initialised before any data can be fed in it. FLIPS data type must be uninitialised state before calling flips\_init. Otherwise, an error will occur. 
+
+If FLIPS data type is used before, it must be deallocated \seealso{flips\_kill} before it is initialised again.
+
+FLIPS data type can be of type s (single real), d (double real), c (single complex) or z (double complex).
+
+Bandwidth and common arguments are (at least for now) only implemented for memory storage problems. If they are set for a file storage problem, the bandwidth will be set to the maximum ($ncol$) and common is set to zero. Also, a warning will be given.
+
+\subsection*{EXAMPLES}
+
+
+\marginlabel{1.}
+initialise a single precision real problem with 500 unknowns, no alternate measurements and default rotation buffer size using memory storage. Theory matrix is full (i.e., no bandwidth (or common variables) given):
+
+\vdots
+
+\code{type(flips\_s) :: prob1}
+
+\vdots
+
+\code{call flips\_init(prob1,500,1)}
+
+\vdots
+
+\marginlabel{2.}
+initialise a double precision real problem with 500 unknowns, no alternate measurements and default rotation buffer size using memory storage. Theory matrix is band-limited with maximum (initial) bandwidth = 50:
+
+\vdots
+
+\code{type(flips\_d) :: prob2}
+
+\vdots
+
+\code{call flips\_init(prob2,500,1,bandwidth=50)}
+
+\vdots
+
+
+%\newpage
+\marginlabel{3.}
+initialise a double precision complex problem with 1000 unknowns, 3 alternate measurements and buffersize = 50 using binary file storage (ID 10):
+
+\vdots
+
+\code{type(flips\_z) :: prob3}
+
+\vdots
+
+\code{call flips\_init(prob3,1000,3,idnum=10,buffersize=50)}
+
+\vdots
+
+\newpage
+\section{flips\_kill}
+
+Deallocates FLIPS data type
+
+\subsection*{SYNTAX}
+\code{call flips\_kill(ftype,keepfiles)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type, initialised using flips\_init.
+\aitem{keepfiles} Logical, optional; if .FALSE. and binary file storage is used, the files will be deleted. default is .TRUE., i.e.\ the binary files are kept. This flag has no function if memory storage is used.
+\end{arglist}
+
+\subsection*{RULES}
+It is a good practice to deallocate data types and arrays at the end of the program.
+
+FLIPS data type must be deallocated if it is to be used again. 
+
+\newpage
+\section{flips\_add}
+Add data into FLIPS data type
+
+\subsection*{SYNTAX}
+\code{call flips\_add(ftype,n,arows,mrows,errors,force\_rotations)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type, initialised.
+\aitem{n} Integer; number of data rows to be fed in.
+\aitem{arows} Real/complex, dimension($n*ncols$); $n$ direct theory matrix rows in a vector (row-major) format. 
+\aitem{mrows} Real/complex, dimension($n*nrhs$); $n$ measurement rows in a vector (row-major) format.
+\aitem{errors} Real, dimension($n$) or dimension($n*n$) or dimension($n*(n+1)/2$), optional; if vector, measurement error variances, and if matrix, the full covariance matrix. The full covariance matrix can be given either as full matrix in row-major format (dimension($n*n$), or as upper triagonal part in row-major order (dimension($n*(n+1)/2$).
+\aitem{force\_rotations} Logical, optional, default .FALSE.. By default, the data rows are first stored into rotation buffer and rotated only when the buffer becomes full. If this flag is set to .TRUE., all the rotations for the added data will be made instantly and the rotation buffer will be emptied\footnote{This is seldom needed in normal use.}. 
+\end{arglist}
+
+\subsection*{RULES}
+\attention Note that measurement (mrows) must be given as a vector even if $n=1$!
+
+\attention Note that it is \emph{not} possible to give distinct errors for alternate measurements (i.e.\ for different measurement matrix columns). 
+
+If the full covariance matrix is used, FLIPS calculates the inverse of the modified Cholesky decomposition of the covariance matrix, and multiplies both \verb!arows! and \verb!mrows! with it. For large problems, this can take a very long time. Therefore, if the covariance matrix is diagonal (i.e. only variance), it is advisable to feed in the covariance data in as standard deviations vector.
+
+If error is the same for all the data rows to be fed in, it can be given as a single scalar.
+
+If error is omitted, FLIPS will use $1.0$ as error term.
+
+\seealso{Code examples} See section \ref{codeex} for examples of using flips\_add.
+
+\newpage
+\section{flips\_solve}
+Solves the FLIPS problem
+
+\subsection*{SYNTAX}
+\code{call flips\_solve(ftype,calc\_res)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type, initialised and the data fed in.
+\aitem{calc\_res} Logical, optional; a flag for residual calculation. Default is .TRUE., i.e.\ the residuals are calculated.
+\end{arglist}
+
+\subsection*{RULES}
+
+\attention FLIPS does not check if enough data rows are fed into a problem. If less than $ncols$ rows are fed in or if the direct theory matrix is degerate, the target matrix will not be invertible. Depending on used Fortran compiler this might give results containing NAN's or INF's, or an error. 
+
+If the problem to be solved is underdetermined, some kind of regularization is necessary. \seealso{\ref{underdet}} See examples in Chapter \ref{codeex}.
+
+\seealso{\ref{flipsget}}The solution can be fetched using FLIPS command flips\_get.
+
+If residual is calculated, it is stored into $nrhs$-vector \code{ftype\%residual}.
+
+
+\newpage
+\section{flips\_calc\_cov}
+Calculates the posteriori covariance matrix
+
+\subsection*{SYNTAX}
+\code{call flips\_calc\_cov(ftype,full)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type
+\aitem{full} Logical, optional; flag for full posteriori covariance matrix calculation. Default is .FALSE., i.e.\ only diagonal elements of the covariance matrix are calculated
+\end{arglist}
+
+\subsection*{RULES}
+
+Either full covariance matrix or only the diagonal elements can be calculated. If only diagonal elements are calculated, they are stored into $ncol$-vector.
+
+\seealso{\ref{flipsget}} The posteriori covariance matrix or diagonal elements vector can be fetched using FLIPS command flips\_get.
+
+\attention Posteriori covariance matrix calculation is very slow when binary file storage is used.
+
+\newpage
+\section{flips\_resize}
+Marginalizes and/or adds unknowns
+
+\subsection*{SYNTAX}
+\code{call flips\_resize(nfob,ofob,newsize,remove,}\newline
+\code{\phantom{call flips\_resize(}idnum,buffersize)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{nfob} type(flips\_<s|d|c|z>); uninitialised FLIPS data type.
+\aitem{ofob}type(flips\_<s|d|c|z>); FLIPS data type, of the same type as \code{nfob}.
+\aitem{newsize} Integer, optional; number of unknowns in \code{nfob}.
+\aitem{remove} Logical, dimension(ofob\%ncols), optional; logical mask vector containing .TRUE. at indices which are to be marginalized.
+\aitem{idnum} Integer, optional; ID number for \code{nfob} if binary file storage is to be used for \code{nfob}.
+\aitem{buffersize} Integer, optional; number of rotation buffer rows for \code{nfob}
+\end{arglist}
+
+\subsection*{RULES}
+\code{nfob} must be in uninitialised state. If it is used before, it must have been deallocated using \code{flips\_kill} before calling \code{flips\_resize}.
+
+If \code{flips\_resize} is called with \code{newsize} without giving \code{remove}, then if
+\begin{itemize}
+\item \code{newsize} < \code{ofob\%ncols}, first \code{ofob\%ncols - newsize} unknowns will be marginalized. 
+\item \code{newsize} > \code{ofob\%ncols}, \code{newsize - ofob\%ncols} new unknowns will be added to the end.
+\item \code{newsize} = \code{ofob\%ncols}, the target matrices $R$ and $Y$ of \code{ofob} will be copied to \code{nfob}. \seealso{flips\_copy}Note that it makes more sense to use \code{flips\_copy} in this case!
+\end{itemize}
+
+If \code{flips\_resize} is called with \code{remove} without giving \code{newsize}, then the unknowns with indices \code{i} for which \code{remove(i)==.TRUE.} will be marginalized. The \code{nfob} will have \code{ofob\%ncols - count(remove)} unknowns. 
+
+If \code{flips\_remove} is called with both \code{newsize} and \code{remove}, then first those unknowns for which \code{remove(i)==.TRUE.} will be marginalized and then \code{newsize - (ofob\%ncols - count(remove))} new unknowns will be added to the end, so that \code{nfob} will have \code{newsize} unknowns.
+
+\subsection*{EXAMPLES}
+
+\marginlabel{1.} Let \code{fob1} and \code{fob2} be two FLIPS data types:
+
+\code{type(flips\_s) :: fob1,fob2}
+
+Let us initialise \code{fob1} with 100 unknowns and 1 right hand side and feed in the data:
+
+\code{call flips\_init(fob1,100,1)}\\
+\vdots\\
+\code{call flips\_add(fob1,...)}
+
+Now marginalize first 10 unknowns and put the resulting new problem into \code{fob2}: now \code{newsize} will be $100-10=90$, so we can use
+
+\code{call flips\_resize(fob2,fob1,newsize=90)}
+
+Another possibility would have been to use \code{remove} mask vector. Declare \code{rem\_mask} to be 100-dimensional logical vector and set the components that are to be marginalized as \code{.TRUE.}:
+
+\code{logical, dimension(100) :: rem\_mask}\\
+\vdots\\
+\code{rem\_mask = .FALSE.}\\
+\code{rem\_mask(1:10) = .TRUE.}\\
+\code{call flips\_resize(fob2,fob1,remove=rem\_mask)}
+
+\marginlabel{2.} Let \code{fob1} and \code{fob2} be FLIPS data types as in the previous example. Let us marginalize unknowns (with indices) 31--40 and add 20 new unknowns. Number of unknowns for \code{fob2} will then be $100-10+20 = 110$ (i.e.\ \code{newsize=110}). Additionally, let us use binary file storage for \code{fob2} (with ID number 10):
+
+\code{logical, dimension(100) :: rem\_mask}\\
+\vdots\\
+\code{rem\_mask = .FALSE.}\\
+\code{rem\_mask(31:40) = .TRUE.}\\
+\code{call flips\_resize(fob2,fob1,newsize=110,}\\
+\code{\phantom{call flips\_resize(}remove=rem\_mask,idnum=10)}
+
+Now \code{fob2} will be a FLIPS data type with 110 unknowns, last 20 of which are new, and the problem data is storaged on the disk with ID=10.
+
+
+
+
+\newpage
+\section{flips\_delete}
+Deletes data rows from FLIPS problem
+
+\subsection*{SYNTAX}
+\code{call flips\_delete(ftype,n,arows,mrows,errors)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{ftype} type(flips\_<s|d|c|z>); initialised FLIPS data type that has at least $ncols + n$ data rows fed in, i.e., the problem must be over determined before calling \verb!flips_delete!.
+\aitem{n} integer; number of rows to be deleted.
+\aitem{arows} Real/complex, dimension($n*ncols$); theory matrix rows to be deleted, in row-major order.
+\aitem{mrows} Real/complex, dimension($n*nrhs$); measurement matrix rows to be deleted, in row major-order.
+\aitem{erows} Real, dimension($n$), the measurements error variances to be deleted. Note that no single value error or full error covariance matrices are allowed (at this time)!
+\end{arglist}
+
+\subsection*{RULES}
+%\attention Data deletion is implemented only for real-valued problems! 
+
+
+
+\attention It is only safe to delete exactly the same data that has been previously fed in. Trying to delete something else (while possible) might (or probably will) blow things up completely! There is currently no possibility to check this beforehand.
+
+\attention Full error covariance matrices as \code{errors} are not supported at this time.
+
+\seealso{Code examples}See Section \ref{codeex} for example of using \code{flips\_delete}.
+
+
+\newpage
+\section{flips\_copy}
+Copies FLIPS data types
+
+\subsection*{SYNTAX}
+\code{call flips\_copy(nfob,ofob,idnum,buffersize)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{nfob} type(flips\_<s|d|c|z>); uninitialised FLIPS data type. After execution, it will contain the same data as \code{ofob}.
+\aitem{ofob} type(flips\_<s|d|c|z>); same type as \code{nfob}.
+\aitem{idnum} Integer, optional; ID number for \code{nfob}. If given, \code{nfob} will use binary file storage.
+\aitem{buffersize} Integer, optional; number of rotation buffer rows for \code{nfob}. If omitted, \code{nfob} will use the same number as \code{ofob}.
+\end{arglist}
+
+\subsection*{RULES}
+FLIPS object \code{nfob} must be uninitialised. If it is used before, it must have been deallocated using \code{flips\_kill}.
+
+\code{flips\_copy} is handy when user wants to change the storage method from binary file storage to memory storage,  or vice versa.
+
+
+
+\newpage
+\section{flips\_get}\label{flipsget}
+Fetches problem matrices and vectors from FLIPS data type
+
+\subsection*{SYNTAX}
+\code{call flips\_get(mtype,ftype,vec/mat)}
+
+\subsection*{ARGUMENTS}
+\begin{arglist}
+\aitem{mtype} character(len=4); name label of the vector/matrix to be fetched.
+\aitem{ftype} type(flips\_<s|d|c|z>); FLIPS data type
+\aitem{vec/mat} Real/complex matrix or vector; after execution will contain the desired vector or matrix.
+\end{arglist}
+
+\subsection*{RULES}
+This command can be used to fetch problem data matrices and vectors into a new variable. Matrices can be fetched in matrix or vector form, see below.
+
+
+The name labels for different vectors/matrices and their sizes are:
+\begin{arglist}
+\aitem{"solu"} Solution matrix/vector. Size in matrix form is $ncols\times nrhs$ and in vector form (in row-major order) $ncols * nrhs$.
+\aitem{"cova"} Posterior covariance matrix (or its diagonal). If only diagonal is calculated, vector size is $ncols$. If full matrix is calculated, the size in the matrix form is $ncols\times ncols$. In the vector form, only the upper triangular part of the symmetric matrix is fetched (in row-major order), so the required size of the vector is $ncols*(ncols+1)/2$.
+\aitem{"rmat"} Theory target matrix $R$. Size in the matrix form is $ncols\times ncols$. In the vector form, only upper triangular part (in row-major order) is fetched, so the size of the vector is $ncols*(ncols+1)/2$.
+\aitem{"ymat"} Measurement target matrix/vector $Y$. Size in the matrix form is $ncols\times nrhs$ and in the vector form (in row-major order) the size is $ncols*nrhs$.
+\aitem{"invr"} Inverse of the target matrix $R$ (used in the posteriori covariance calculation). The sizes are the same as in the \code{'rmat'} case.
+\end{arglist}
+
+
+
+
+\chapter{Examples}\label{codeex}
+
+\section{Solving a simple linear system}
+
+In the first example, let us solve the following simple (over determined) linear system:
+\[
+m = A\cdot x,
+\]
+where
+\[
+m =
+\begin{pmatrix}
+0 \\
+1\\
+2\\
+2
+\end{pmatrix}\qquad\text{and}\qquad
+A=
+\begin{pmatrix}
+1 & 2 & 3\\
+2 & 3 & 1\\
+3 & 2 & 1\\
+1 & 3 & 2
+\end{pmatrix}.
+\]
+
+This can be solved using FLIPS as follows:
+
+%\marl{program starts}
+\verb#program ex1#\\
+\verb#  use flips#\\
+\verb#  implicit none#\\[6pt]
+\marl{declare variables}
+\verb!  type(flips_s) :: h!\\
+\verb#  real(sp), dimension(3) :: Arow#\\
+\verb#  real(sp), dimension(1) :: meas#\\
+\verb#  real(sp), dimension(3) :: solution#\\[6pt]
+\marl{initialise FLIPS data type}
+\verb!  call flips_init(h,3,1)!\\[6pt]
+\marl{Add data row-by-row}
+\verb#  Arow = (/ 1.0, 2.0, 3.0 /)#\\
+\verb#  meas = 0.0#\\
+%\marl{first row}
+\verb#  call flips_add(h,1,Arow,meas)#\\[6pt]
+\verb#  Arow = (/ 2.0, 3.0, 1.0 /)#\\
+\verb#  meas = 1.0#\\
+%\marl{second row}
+\verb#  call flips_add(h,1,Arow,meas)#\\[6pt]
+\verb#  Arow = (/ 3.0, 2.0, 1.0 /)#\\
+\verb#  meas = 2.0#\\
+%\marl{third row}
+\verb#  call flips_add(h,1,Arow,meas)#\\[6pt]
+\verb#  Arow = (/ 1.0, 3.0, 2.0 /)#\\
+\verb#  meas = 2.0#\\
+%\marl{fourth row}
+\verb#  call flips_add(h,1,Arow,meas)#\\[6pt]
+\marl{solve problem}
+\verb#  call flips_solve(h)#\\[6pt]
+\marl{fetch solution}
+\verb#  call flips_get("solu",h,solution)#\\[6pt]
+%\marl{program ends}
+\verb#end program ex1#
+
+\newpage
+
+
+
+
+
+
+\section{Solving a linear system with errors}
+
+Let us add measurement errors to the previous example. In other words, let us solve the problem
+\[
+m = A\cdot x + \varepsilon,
+\]
+where
+\[
+m =
+\begin{pmatrix}
+0 \\
+1\\
+2\\
+2
+\end{pmatrix},\qquad
+A=
+\begin{pmatrix}
+1 & 2 & 3\\
+2 & 3 & 1\\
+3 & 2 & 1\\
+1 & 3 & 2
+\end{pmatrix}\qquad\text{and}\qquad
+\varepsilon=
+\left(\begin{array}{c}0.1 \\0.2 \\0.3 \\0.4\end{array}\right).
+\]
+Note that in this case, the error covariance matrix is
+\[
+\Sigma=
+\left(\begin{array}{cccc}0.1^2 & 0 & 0 & 0 \\0 & 0.2^2 & 0 & 0 \\0 & 0 & 0.3^2 & 0 \\0 & 0 & 0 & 0.4^2\end{array}\right)
+\]
+
+In the following, above problem is solved by FLIPS using binary file storage and double precision. Moreover, the data is fed into FLIPS two rows at the time:
+
+\verb#program ex2#\\
+\verb#  use flips#\\
+\verb#  implicit none#\\[6pt]
+\marl{declare variables}
+\verb#  type(flips_d) :: h#\\
+\verb#  real(dp), dimension(6) :: Arows#\\
+\verb#  real(dp), dimension(2) :: meas, errors#\\
+\verb#  real(dp), dimension(3) :: solution#\\
+\verb#  real(dp), dimension(3,3) :: post_covar_matrix#\\[6pt]
+\marl{initialise FLIPS (with binary file storage)}
+\verb#  call flips_init(h,3,1,idnum=1)#\\[18pt]
+\marl{feed data in}
+\verb#  Arows = (/ 1.0, 2.0, 3.0, 2.0, 3.0, 1.0 /)#\\
+\verb#  meas = (/ 0.0, 1.0 /)#\\
+\verb#  errors = (/ 0.1, 0.2 /)#\\
+\verb#  call flips_add(h,2,Arows,meas,errors)#\\[6pt]
+\verb#  Arows = (/ 3.0, 2.0, 1.0, 1.0, 3.0, 2.0 /)#\\
+\verb#  meas = (/ 2.0, 2.0 /)#\\
+\verb#  errors = (/ 0.3, 0.4 /)#\\
+\verb#  call flips_add(h,2,Arows,meas,errors)#\\[6pt]
+\marl{solve and fetch solution}
+\verb#  call flips_solve(h)#\\
+\verb#  call flips_get("solu",h,solution)#\\[6pt]
+\marl{calculate and fetch the posteriori covariance matrix}
+\verb#  call flips_calc_cov(h,full=.TRUE.)#\\
+\verb#  call flips_get("cova",h,post_covar_matrix)#\\[6pt]
+\marl{deallocate FLIPS data type}
+\verb#  call flips_kill(h)#\\[6pt]
+\verb#end program ex2#\\
+
+
+\newpage
+
+\section{Solving underdetermined problem (using regularization)}\label{underdet}
+
+Let us find the shortest vector $x$ that satisfies the underdetermined linear system
+\[
+m = A\cdot x + \varepsilon,
+\]
+where
+\[
+A=
+\left(\begin{array}{ccc}1 & 2 & 1 \\3 & 1 & 2 \end{array}\right),\qquad
+m=
+\left(\begin{array}{c}1 \\ 0\end{array}\right)
+\]
+and $\varepsilon$ is a $2\times 1$ matrix consisting of $1$'s.
+Since FLIPS can not directly handle underdetermined systems, we have to use regularization. To this end, we extend the above system by
+\[
+\left(\begin{array}{c}m \\0\end{array}\right) =
+\left(\begin{array}{c}A \\I\end{array}\right)\cdot x +
+\left(\begin{array}{c}\varepsilon \\\varepsilon_r\end{array}\right),
+\]
+where $I$ is a $3\times 3$ identity matrix, $0$ is a $3\times 1$ zero column vector and $\varepsilon_r$ is a $3\times 1$ column vector with arbitrary great values, say $10^6$. Hence, we replace the original problem with
+\[
+\left(\begin{array}{c}1 \\0 \\0 \\0 \\ 0\end{array}\right)
+=
+\left(\begin{array}{ccc}1 & 2 & 1 \\3 & 1 & 2 \\1 & 0 & 0 \\ 0 & 1 & 0 \\0 & 0 & 1\end{array}\right)\cdot x +
+\left(\begin{array}{c}1 \\1 \\10^6 \\10^6 \\10^6\end{array}\right).
+\]
+In other words, in addition to the original data which is in the first two rows of the vectors and the matrix, we "allow" every unknown to be statistically zero with a very big standard deviation.
+This is now "overdetermined" system, so we can use FLIPS.
+
+\verb#program ex3#\\
+\verb#  use flips#\\
+\verb#  implicit none#\\[6pt]
+\marl{declare variables}
+\verb#  type(flips_s) :: h#\\
+\verb#  integer :: n#\\
+\verb#  real(sp), dimension(6) :: Adata#\\
+\verb#  real(sp), dimension(2) :: mdata, edata#\\
+\verb#  real(sp), dimension(3,3) :: id_mat#\\
+\verb#  real(sp), dimension(3) :: mreg, ereg, solution, &#\\
+\verb#                            cov_mat_diag#\\[6pt]
+\marl{initialise FLIPS}
+\verb#  call flips_init(h,3,1)#\\[6pt]
+\marl{feed in the data}
+\verb#  Adata = (/ 1.0, 2.0, 1.0, 3.0, 1.0, 2.0 /)#\\
+\verb#  mdata = (/ 1.0, 0.0 /)#\\
+\verb#  edata = 1.0#\\
+\verb#  call flips_add(h,2,Adata,mdata,edata)#\\[6pt]
+\marl{construct the regularization matrices and feed them in one row at the time}
+\verb#  id_mat = 0.0#\\
+\verb#  do n = 1,3#\\
+\verb#     id_mat(n,n) = 1.0#\\
+\verb#  end do#\\
+\verb#  mreg = 0.0#\\
+\verb#  ereg = 1.0E6#\\
+\verb#  do n = 1,3#\\
+\verb#     call flips_add(h,1,id_mat(n,:),mreg,ereg)#\\
+\verb#  end do#\\[16pt]
+\marl{solve the problem and fetch solution}
+\verb#  call flips_solve(h)#\\
+\verb#  call flips_get("solu",h,solution)#\\[6pt]
+\marl{calculate the diagonal of the posteriori covariance matrix and fetch it}
+\verb#  call flips_calc_cov(h,full=.FALSE.)#\\
+\verb#  call flips_get("cova",h,cov_mat_diag)#\\[12pt]
+\marl{deallocate FLIPS data type}
+\verb#  call flips_kill(h)#\\
+\verb#end program ex3#\\
+
+\newpage
+
+\section{Marginalizing and adding unknowns (using flips\_resize)}
+
+In this example, we will first create a FLIPS data type with 500 unknowns, add the data (1000 random equations), and then marginalize away first 50 unknowns. After that, we will add 50 new unknowns.
+
+\verb#program ex4#\\
+\verb#  use flips#\\
+\verb#  implicit none#\\
+\marl{declare variables}
+\verb#  type(flips_s) :: f1, f2#\\
+\verb#  real(sp), dimension(500) :: arow#\\
+\verb#  real(sp), dimension(1000,1) :: meas#\\
+\verb#  logical, dimension(500) :: remove_mask#\\
+\verb#  integer :: i#\\[6pt]
+\marl{initialise FLIPS (f1)}
+\verb#  call flips_init(f1,500,1)#\\[6pt]
+\marl{feed in the data (row-by-row)}
+\verb#  call random_number(meas)#\\
+\verb#  do i = 1,1000#\\
+\verb#    call random_number(arow)#\\
+\verb#    call flips_add(f1,1,arow,meas(i,:))#\\
+\verb#  end do#\\[6pt]
+\marl{marginalize 50 first unknowns}
+\verb#  remove_mask = .FALSE.#\\
+\verb#  remove_mask(1:50) = .TRUE.#\\
+\verb#  call flips_resize(f2,f1,remove=remove_mask)#\\[6pt]
+
+Now FLIPS data type \verb#f2# will contain the unknowns 51--500. We could solve both \verb#f1# and \verb#f2# and see, that the solutions for unknowns 51--500 agree.
+
+Next, we reuse \verb#f1#, so we can add 50 new unknowns to \verb#f2#:
+
+\marl{deallocate f1}
+\verb#  call flips_kill(f1)#\\[6pt]
+\marl{add 50 unknowns}
+\verb#  call flips_resize(f1,f2,newsize=500)#\\[6pt]
+
+FLIPS data type \verb#f1# will now contain 500 unknowns, numbers 451--500 being new. Note that \verb#f1# is not solvable until more data is fed in! If \verb#f2# is not needed anymore, it can be deallocated.
+
+\verb#.#\\
+\verb#.#\\
+\verb#.#\\
+\verb#end program ex4#\\
+
+
+\section{Deleting data}
+
+In this example, we first feed in all the data, then delete some of it and then solve the problem. After that we solve the same problem without feeding in the before deleted data rows, solve the problem and compare the results.
+
+\verb!program ex5!\\
+\verb!  use flips!\\
+\verb!  implicit none!\\
+\verb!!\\
+\marl{declare variables}
+\verb!  type(flips_s) :: h!\\
+\verb!  real(sp), dimension(200,100) :: theorymat!\\
+\verb!  real(sp), dimension(200) :: meas!\\
+\verb!  real(sp), dimension(100) :: sol1, sol2!\\
+\verb!  integer :: i!\\
+\verb!!\\
+\marl{initialise FLIPS}
+\verb!  call flips_init(h,100,1,buffersize=100)!\\
+\verb!!\\
+\marl{construct random data}
+\verb!  call random_number(theorymat)!\\
+\verb!  call random_number(meas)!\\
+\verb!!\\
+\marl{feed data in}
+\verb!  do i = 1,200!\\
+\verb!     call flips_add(h,1,theorymat(i,:),(/ meas(i) /))!\\
+\verb!  end do!\\
+
+%\verb!  call make_rotations_s(h)!\\
+%\verb!!\\
+\marl{delete the last 50 data rows}
+\verb!  do i = 151,200!\\
+\verb!     call flips_delete(h,1,theorymat(i,:), (/ meas(i) /))!\\
+\verb!  end do!\\
+
+\marl{solve and store solution}
+\verb!  call flips_solve(h)!\\
+\verb!!\\
+\verb!  sol1 = h%solmat!\\
+\verb!!\\
+\verb!  call flips_kill(h)!\\
+
+\marl{the same problem without deletion}
+\verb!  call flips_init(h,100,1,buffersize=100)!\\
+\verb!!\\
+\marl{feed in the first 150 rows}
+\verb!  do i = 1,150!\\
+\verb!     call flips_add(h,1,theorymat(i,:),(/ meas(i) /))!\\
+\verb!  end do!\\
+
+\marl{solve and compare two solutions}
+\verb!  call flips_solve(h)!\\
+\verb!!\\
+\verb!  sol2 = h%solmat!\\
+\verb!!\\
+\verb!  call flips_kill(h)!\\
+\verb!!\\
+\marl{the difference should be very small}
+\verb!  write(*,*) maxval(sol1 - sol2)!\\
+\verb!!\\
+\verb!end program ex5!\\
+
+\part{Technical Notes}
+
+\chapter{Compiling and installing}
+
+\section{Fortran 2003 extensions}
+
+By default, FLIPS uses some F2003 extensions, namely, stream I/O and allocatable components in structured data types. However, not every modern Fortran 95 compiler support these features, see table below:
+
+\begin{tabular}{rcc}
+& Stream I/O & Allocatable components \\\hline
+IBM XLF & Yes & Yes \\
+g95 & Yes & Yes \\
+gfortran${^1}$ & Yes & Yes\\
+Absoft Fortran & No${^2}$ & Yes \\
+Intel ifort & Yes${}^2$ & Yes \\
+Portland Group Fortran${^3}$ & No & Yes \\
+Sun Fortran${^3}$ & No & Yes \\
+Pathscale Fortran${^3}$ & No & No \\
+\hline
+\multicolumn{3}{l}{\footnotesize ${}^1$ Version 4.2.0 was first to support both extensions.}\\
+\multicolumn{3}{l}{\footnotesize ${}^2$ Stream I/O implemented in version 10.1.}\\ 
+\multicolumn{3}{l}{\footnotesize with the proposed F2003 standard.}\\
+\multicolumn{3}{l}{\footnotesize ${}^3$ Tested by J.~Vuorinen.}
+
+\end{tabular}
+ 
+ 
+\section{Compiling FLIPS module}\label{f2003ext}
+
+At this time there is a very basic GNU autoconf configure script (made by Juha Vierinen) available. This script tries to find the system's Fortran compiler and automagically modify the file \verb!Make.defs! accordingly to take care of the Fortran 2003 extensions. However, it is advisable to manually check the resulting file \verb!Make.defs! to make sure that the right extensions are being used (and also to check the compiler flags for optimization). 
+
+The autoconfiguration is made by giving the command
+\begin{verbatim}
+./configure
+\end{verbatim}
+in the FLIPS source root directory.
+
+At this time the allocatable components extension is required and FLIPS can not be compiled without it, but the user can choose how to handle the stream I/O. \attention \emph{Note, however, that the use of binary file storage is advisable only if Stream I/O is available, since the alternative (Direct access file I/O) is very slow in most compilers!}
+
+\attention The compiling process needs also GNU M4 macro processor which is freely available (and part of the Mac OS X\footnote{Some Mac OS X versions ship with a buggy M4 macro processor. See the file \code{INSTALL} in FLIPS source root directory!} and most of the Linux distributions).
+
+The \verb!Make.defs! file must have (at least) the following rows (example is for Intel Ifort):
+
+\begin{verbatim}
+FC=ifort
+CPP=cpp -P -Wtraditional 
+CPPFLAGS= -DF2003_STREAM
+FFLAGS= -O3 -assume byterecl 
+M4FLAGS=-DF2003_STREAM
+\end{verbatim}
+
+The used variables are
+\begin{arglist}
+\aitem{FC} Fortran90 compiler command
+\aitem{FFLAGS} Fortran compiler options
+\aitem{CPP} (GNU) C preprocessor command
+\aitem{CPPFLAGS} \verb!-DF2003_STREAM! (for compilers suporting Stream I/O) \emph{or}\\ \verb!-DDIRECT! (for compilers not supporting the Stream I/O extension)
+\aitem{M4FLAGS} \verb!-DF2003_STREAM! (for compilers suporting Stream I/O) \emph{or}\\ \verb!-DDIRECT! (for compilers not supporting the Stream I/O extension)
+\end{arglist}
+
+%In the future there may be more cpp flags to handle larger number of different F90 compilers.
+
+After the autoconfiguration (and possible modifications to the file \verb!Make.defs!), the FLIPS module is build with the command
+\begin{verbatim}
+make
+\end{verbatim}
+
+If everything goes smoothly, the following files will be created:
+\begin{arglist}
+\aitem{libflips.a} Archived library version of the FLIPS module
+\aitem{flips.o} FLIPS module object file
+\aitem{flips.mod} (name and extension may vary depending on Fortran compiler) FLIPS module include file
+\end{arglist}
+
+The library file \verb!libflips.a! (and/or \verb!flips.o!) should be copied somewhere in the library search path of the used compiler/linker and the file \verb!flips.mod! somewhere from where the fortran complier searches for the module include files. Alternatively, the file \verb!flips.o! can be used instead of the library file \verb!libflips.a!.
+
+
+
+\chapter{Using FLIPS in Fortran programs}
+
+Using FLIPS module in one's own Fortran programs is pretty straight forward. See the Examples for how to use FLIPS in Fortran code. 
+
+When compiling, the FLIPS module must be linked in the normal way with the program that uses it. Consult the User Guide of the used Fortran compiler for instructions.
+
+\chapter{Interfaces for R and MATLAB}
+
+\emph{Experimental} R and MATLAB interfaces together with \emph{minimal} instructions of how to install and use them can be found in the \verb!interfaces! directory of FLIPS source distribution. These interfaces are not really suitable for larger problems at this point, but they are going to be developed further.
+
+\attention We have dropped the support for MATLAB interface for the time being due to the low demand and the high amount of work to maintain it. Last working version of FLIPS with MATLAB interface is 1.5. 
+
+%\chapter{Release notes}
+
+%\section*{Version 1.0}
+
+%Initial release
+
+%\section*{version 1.1}
+
+%\begin{itemize}
+%\item Some bug fixes in FLIPS module
+%\item New FLIPS interface driver \verb!flipseng24!
+%\item FLIPS now keeps record of non-zero elements of theory matrix and target matrix and does not anymore rotate a lot of zeros with zeros. This leads to huge increase in the performance if the theory matrix is band (or limited bandwidth) matrix.
+%\end{itemize}
+
+\chapter{Misc stuff}
+
+\section{Bugs}
+
+FLIPS most probably contains number of bugs, some of which probably big and ugly. If you find that something does not work as it should, please send email describing the problem to
+
+\begin{verbatim}
+mikko.orispaa@oulu.fi
+\end{verbatim}
+
+%\section{Things to do}
+
+%Below is a completely informal and incomplete list of things that will or could or should be implemented in FLIPS someday.
+
+%\begin{itemize}
+%\item Support for larger number of Fortran compilers
+%\item A proper configuration script
+%\item Support for sparse and band-like theory matrices (Partially done!)
+%\item Support for common variables
+%\item Performance enhancements by using SIMD units and vector code
+%\item Parallelization of the code
+%\end{itemize}
+
+%If you need or know of a feature that could/should be implemented in FLIPS, do not hesitate to contact us!
+
+
+%\part{Appendices}
+
+%\chapter{GNU Free Documentation License}
+
+%%\chapter{GNU Free Documentation License}
+%%\label{label_fdl}
+
+% \begin{center}
+
+%       Version 1.2, November 2002
+
+%
+% Copyright \copyright 2000,2001,2002  Free Software Foundation, Inc.
+% 
+% \bigskip
+% 
+%     51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+%  
+% \bigskip
+% 
+% Everyone is permitted to copy and distribute verbatim copies
+% of this license document, but changing it is not allowed.
+%\end{center}
+
+%
+%\begin{center}
+%{\bf\large Preamble}
+%\end{center}
+
+%The purpose of this License is to make a manual, textbook, or other
+%functional and useful document "free" in the sense of freedom: to
+%assure everyone the effective freedom to copy and redistribute it,
+%with or without modifying it, either commercially or noncommercially.
+%Secondarily, this License preserves for the author and publisher a way
+%to get credit for their work, while not being considered responsible
+%for modifications made by others.
+
+%This License is a kind of "copyleft", which means that derivative
+%works of the document must themselves be free in the same sense.  It
+%complements the GNU General Public License, which is a copyleft
+%license designed for free software.
+
+%We have designed this License in order to use it for manuals for free
+%software, because free software needs free documentation: a free
+%program should come with manuals providing the same freedoms that the
+%software does.  But this License is not limited to software manuals;
+%it can be used for any textual work, regardless of subject matter or
+%whether it is published as a printed book.  We recommend this License
+%principally for works whose purpose is instruction or reference.
+
+%
+%\begin{center}
+%{\Large\bf 1. APPLICABILITY AND DEFINITIONS}
+%\addcontentsline{toc}{section}{1. APPLICABILITY AND DEFINITIONS}
+%\end{center}
+
+%This License applies to any manual or other work, in any medium, that
+%contains a notice placed by the copyright holder saying it can be
+%distributed under the terms of this License.  Such a notice grants a
+%world-wide, royalty-free license, unlimited in duration, to use that
+%work under the conditions stated herein.  The \textbf{"Document"}, below,
+%refers to any such manual or work.  Any member of the public is a
+%licensee, and is addressed as \textbf{"you"}.  You accept the license if you
+%copy, modify or distribute the work in a way requiring permission
+%under copyright law.
+
+%A \textbf{"Modified Version"} of the Document means any work containing the
+%Document or a portion of it, either copied verbatim, or with
+%modifications and/or translated into another language.
+
+%A \textbf{"Secondary Section"} is a named appendix or a front-matter section of
+%the Document that deals exclusively with the relationship of the
+%publishers or authors of the Document to the Document's overall subject
+%(or to related matters) and contains nothing that could fall directly
+%within that overall subject.  (Thus, if the Document is in part a
+%textbook of mathematics, a Secondary Section may not explain any
+%mathematics.)  The relationship could be a matter of historical
+%connection with the subject or with related matters, or of legal,
+%commercial, philosophical, ethical or political position regarding
+%them.
+
+%The \textbf{"Invariant Sections"} are certain Secondary Sections whose titles
+%are designated, as being those of Invariant Sections, in the notice
+%that says that the Document is released under this License.  If a
+%section does not fit the above definition of Secondary then it is not
+%allowed to be designated as Invariant.  The Document may contain zero
+%Invariant Sections.  If the Document does not identify any Invariant
+%Sections then there are none.
+
+%The \textbf{"Cover Texts"} are certain short passages of text that are listed,
+%as Front-Cover Texts or Back-Cover Texts, in the notice that says that
+%the Document is released under this License.  A Front-Cover Text may
+%be at most 5 words, and a Back-Cover Text may be at most 25 words.
+
+%A \textbf{"Transparent"} copy of the Document means a machine-readable copy,
+%represented in a format whose specification is available to the
+%general public, that is suitable for revising the document
+%straightforwardly with generic text editors or (for images composed of
+%pixels) generic paint programs or (for drawings) some widely available
+%drawing editor, and that is suitable for input to text formatters or
+%for automatic translation to a variety of formats suitable for input
+%to text formatters.  A copy made in an otherwise Transparent file
+%format whose markup, or absence of markup, has been arranged to thwart
+%or discourage subsequent modification by readers is not Transparent.
+%An image format is not Transparent if used for any substantial amount
+%of text.  A copy that is not "Transparent" is called \textbf{"Opaque"}.
+
+%Examples of suitable formats for Transparent copies include plain
+%ASCII without markup, Texinfo input format, LaTeX input format, SGML
+%or XML using a publicly available DTD, and standard-conforming simple
+%HTML, PostScript or PDF designed for human modification.  Examples of
+%transparent image formats include PNG, XCF and JPG.  Opaque formats
+%include proprietary formats that can be read and edited only by
+%proprietary word processors, SGML or XML for which the DTD and/or
+%processing tools are not generally available, and the
+%machine-generated HTML, PostScript or PDF produced by some word
+%processors for output purposes only.
+
+%The \textbf{"Title Page"} means, for a printed book, the title page itself,
+%plus such following pages as are needed to hold, legibly, the material
+%this License requires to appear in the title page.  For works in
+%formats which do not have any title page as such, "Title Page" means
+%the text near the most prominent appearance of the work's title,
+%preceding the beginning of the body of the text.
+
+%A section \textbf{"Entitled XYZ"} means a named subunit of the Document whose
+%title either is precisely XYZ or contains XYZ in parentheses following
+%text that translates XYZ in another language.  (Here XYZ stands for a
+%specific section name mentioned below, such as \textbf{"Acknowledgements"},
+%\textbf{"Dedications"}, \textbf{"Endorsements"}, or \textbf{"History"}.)  
+%To \textbf{"Preserve the Title"}
+%of such a section when you modify the Document means that it remains a
+%section "Entitled XYZ" according to this definition.
+
+%The Document may include Warranty Disclaimers next to the notice which
+%states that this License applies to the Document.  These Warranty
+%Disclaimers are considered to be included by reference in this
+%License, but only as regards disclaiming warranties: any other
+%implication that these Warranty Disclaimers may have is void and has
+%no effect on the meaning of this License.
+
+%\newpage
+%\begin{center}
+%{\Large\bf 2. VERBATIM COPYING}
+%\addcontentsline{toc}{section}{2. VERBATIM COPYING}
+%\end{center}
+
+%You may copy and distribute the Document in any medium, either
+%commercially or noncommercially, provided that this License, the
+%copyright notices, and the license notice saying this License applies
+%to the Document are reproduced in all copies, and that you add no other
+%conditions whatsoever to those of this License.  You may not use
+%technical measures to obstruct or control the reading or further
+%copying of the copies you make or distribute.  However, you may accept
+%compensation in exchange for copies.  If you distribute a large enough
+%number of copies you must also follow the conditions in section 3.
+
+%You may also lend copies, under the same conditions stated above, and
+%you may publicly display copies.
+
+%
+%\begin{center}
+%{\Large\bf 3. COPYING IN QUANTITY}
+%\addcontentsline{toc}{section}{3. COPYING IN QUANTITY}
+%\end{center}
+
+%
+%If you publish printed copies (or copies in media that commonly have
+%printed covers) of the Document, numbering more than 100, and the
+%Document's license notice requires Cover Texts, you must enclose the
+%copies in covers that carry, clearly and legibly, all these Cover
+%Texts: Front-Cover Texts on the front cover, and Back-Cover Texts on
+%the back cover.  Both covers must also clearly and legibly identify
+%you as the publisher of these copies.  The front cover must present
+%the full title with all words of the title equally prominent and
+%visible.  You may add other material on the covers in addition.
+%Copying with changes limited to the covers, as long as they preserve
+%the title of the Document and satisfy these conditions, can be treated
+%as verbatim copying in other respects.
+
+%If the required texts for either cover are too voluminous to fit
+%legibly, you should put the first ones listed (as many as fit
+%reasonably) on the actual cover, and continue the rest onto adjacent
+%pages.
+
+%If you publish or distribute Opaque copies of the Document numbering
+%more than 100, you must either include a machine-readable Transparent
+%copy along with each Opaque copy, or state in or with each Opaque copy
+%a computer-network location from which the general network-using
+%public has access to download using public-standard network protocols
+%a complete Transparent copy of the Document, free of added material.
+%If you use the latter option, you must take reasonably prudent steps,
+%when you begin distribution of Opaque copies in quantity, to ensure
+%that this Transparent copy will remain thus accessible at the stated
+%location until at least one year after the last time you distribute an
+%Opaque copy (directly or through your agents or retailers) of that
+%edition to the public.
+
+%It is requested, but not required, that you contact the authors of the
+%Document well before redistributing any large number of copies, to give
+%them a chance to provide you with an updated version of the Document.
+
+%
+%\begin{center}
+%{\Large\bf 4. MODIFICATIONS}
+%\addcontentsline{toc}{section}{4. MODIFICATIONS}
+%\end{center}
+
+%You may copy and distribute a Modified Version of the Document under
+%the conditions of sections 2 and 3 above, provided that you release
+%the Modified Version under precisely this License, with the Modified
+%Version filling the role of the Document, thus licensing distribution
+%and modification of the Modified Version to whoever possesses a copy
+%of it.  In addition, you must do these things in the Modified Version:
+
+%\begin{itemize}
+%\item[A.] 
+%   Use in the Title Page (and on the covers, if any) a title distinct
+%   from that of the Document, and from those of previous versions
+%   (which should, if there were any, be listed in the History section
+%   of the Document).  You may use the same title as a previous version
+%   if the original publisher of that version gives permission.
+%   
+%\item[B.]
+%   List on the Title Page, as authors, one or more persons or entities
+%   responsible for authorship of the modifications in the Modified
+%   Version, together with at least five of the principal authors of the
+%   Document (all of its principal authors, if it has fewer than five),
+%   unless they release you from this requirement.
+%   
+%\item[C.]
+%   State on the Title page the name of the publisher of the
+%   Modified Version, as the publisher.
+%   
+%\item[D.]
+%   Preserve all the copyright notices of the Document.
+%   
+%\item[E.]
+%   Add an appropriate copyright notice for your modifications
+%   adjacent to the other copyright notices.
+%   
+%\item[F.]
+%   Include, immediately after the copyright notices, a license notice
+%   giving the public permission to use the Modified Version under the
+%   terms of this License, in the form shown in the Addendum below.
+%   
+%\item[G.]
+%   Preserve in that license notice the full lists of Invariant Sections
+%   and required Cover Texts given in the Document's license notice.
+%   
+%\item[H.]
+%   Include an unaltered copy of this License.
+%   
+%\item[I.]
+%   Preserve the section Entitled "History", Preserve its Title, and add
+%   to it an item stating at least the title, year, new authors, and
+%   publisher of the Modified Version as given on the Title Page.  If
+%   there is no section Entitled "History" in the Document, create one
+%   stating the title, year, authors, and publisher of the Document as
+%   given on its Title Page, then add an item describing the Modified
+%   Version as stated in the previous sentence.
+%   
+%\item[J.]
+%   Preserve the network location, if any, given in the Document for
+%   public access to a Transparent copy of the Document, and likewise
+%   the network locations given in the Document for previous versions
+%   it was based on.  These may be placed in the "History" section.
+%   You may omit a network location for a work that was published at
+%   least four years before the Document itself, or if the original
+%   publisher of the version it refers to gives permission.
+%   
+%\item[K.]
+%   For any section Entitled "Acknowledgements" or "Dedications",
+%   Preserve the Title of the section, and preserve in the section all
+%   the substance and tone of each of the contributor acknowledgements
+%   and/or dedications given therein.
+%   
+%\item[L.]
+%   Preserve all the Invariant Sections of the Document,
+%   unaltered in their text and in their titles.  Section numbers
+%   or the equivalent are not considered part of the section titles.
+%   
+%\item[M.]
+%   Delete any section Entitled "Endorsements".  Such a section
+%   may not be included in the Modified Version.
+%   
+%\item[N.]
+%   Do not retitle any existing section to be Entitled "Endorsements"
+%   or to conflict in title with any Invariant Section.
+%   
+%\item[O.]
+%   Preserve any Warranty Disclaimers.
+%\end{itemize}
+
+%If the Modified Version includes new front-matter sections or
+%appendices that qualify as Secondary Sections and contain no material
+%copied from the Document, you may at your option designate some or all
+%of these sections as invariant.  To do this, add their titles to the
+%list of Invariant Sections in the Modified Version's license notice.
+%These titles must be distinct from any other section titles.
+
+%You may add a section Entitled "Endorsements", provided it contains
+%nothing but endorsements of your Modified Version by various
+%parties--for example, statements of peer review or that the text has
+%been approved by an organization as the authoritative definition of a
+%standard.
+
+%You may add a passage of up to five words as a Front-Cover Text, and a
+%passage of up to 25 words as a Back-Cover Text, to the end of the list
+%of Cover Texts in the Modified Version.  Only one passage of
+%Front-Cover Text and one of Back-Cover Text may be added by (or
+%through arrangements made by) any one entity.  If the Document already
+%includes a cover text for the same cover, previously added by you or
+%by arrangement made by the same entity you are acting on behalf of,
+%you may not add another; but you may replace the old one, on explicit
+%permission from the previous publisher that added the old one.
+
+%The author(s) and publisher(s) of the Document do not by this License
+%give permission to use their names for publicity for or to assert or
+%imply endorsement of any Modified Version.
+
+%
+%\begin{center}
+%{\Large\bf 5. COMBINING DOCUMENTS}
+%\addcontentsline{toc}{section}{5. COMBINING DOCUMENTS}
+%\end{center}
+
+%
+%You may combine the Document with other documents released under this
+%License, under the terms defined in section 4 above for modified
+%versions, provided that you include in the combination all of the
+%Invariant Sections of all of the original documents, unmodified, and
+%list them all as Invariant Sections of your combined work in its
+%license notice, and that you preserve all their Warranty Disclaimers.
+
+%The combined work need only contain one copy of this License, and
+%multiple identical Invariant Sections may be replaced with a single
+%copy.  If there are multiple Invariant Sections with the same name but
+%different contents, make the title of each such section unique by
+%adding at the end of it, in parentheses, the name of the original
+%author or publisher of that section if known, or else a unique number.
+%Make the same adjustment to the section titles in the list of
+%Invariant Sections in the license notice of the combined work.
+
+%In the combination, you must combine any sections Entitled "History"
+%in the various original documents, forming one section Entitled
+%"History"; likewise combine any sections Entitled "Acknowledgements",
+%and any sections Entitled "Dedications".  You must delete all sections
+%Entitled "Endorsements".
+
+%\begin{center}
+%{\Large\bf 6. COLLECTIONS OF DOCUMENTS}
+%\addcontentsline{toc}{section}{6. COLLECTIONS OF DOCUMENTS}
+%\end{center}
+
+%You may make a collection consisting of the Document and other documents
+%released under this License, and replace the individual copies of this
+%License in the various documents with a single copy that is included in
+%the collection, provided that you follow the rules of this License for
+%verbatim copying of each of the documents in all other respects.
+
+%You may extract a single document from such a collection, and distribute
+%it individually under this License, provided you insert a copy of this
+%License into the extracted document, and follow this License in all
+%other respects regarding verbatim copying of that document.
+
+%
+%\begin{center}
+%{\Large\bf 7. AGGREGATION WITH INDEPENDENT WORKS}
+%\addcontentsline{toc}{section}{7. AGGREGATION WITH INDEPENDENT WORKS}
+%\end{center}
+
+%
+%A compilation of the Document or its derivatives with other separate
+%and independent documents or works, in or on a volume of a storage or
+%distribution medium, is called an "aggregate" if the copyright
+%resulting from the compilation is not used to limit the legal rights
+%of the compilation's users beyond what the individual works permit.
+%When the Document is included in an aggregate, this License does not
+%apply to the other works in the aggregate which are not themselves
+%derivative works of the Document.
+
+%If the Cover Text requirement of section 3 is applicable to these
+%copies of the Document, then if the Document is less than one half of
+%the entire aggregate, the Document's Cover Texts may be placed on
+%covers that bracket the Document within the aggregate, or the
+%electronic equivalent of covers if the Document is in electronic form.
+%Otherwise they must appear on printed covers that bracket the whole
+%aggregate.
+
+%
+%\begin{center}
+%{\Large\bf 8. TRANSLATION}
+%\addcontentsline{toc}{section}{8. TRANSLATION}
+%\end{center}
+
+%
+%Translation is considered a kind of modification, so you may
+%distribute translations of the Document under the terms of section 4.
+%Replacing Invariant Sections with translations requires special
+%permission from their copyright holders, but you may include
+%translations of some or all Invariant Sections in addition to the
+%original versions of these Invariant Sections.  You may include a
+%translation of this License, and all the license notices in the
+%Document, and any Warranty Disclaimers, provided that you also include
+%the original English version of this License and the original versions
+%of those notices and disclaimers.  In case of a disagreement between
+%the translation and the original version of this License or a notice
+%or disclaimer, the original version will prevail.
+
+%If a section in the Document is Entitled "Acknowledgements",
+%"Dedications", or "History", the requirement (section 4) to Preserve
+%its Title (section 1) will typically require changing the actual
+%title.
+
+%
+%\begin{center}
+%{\Large\bf 9. TERMINATION}
+%\addcontentsline{toc}{section}{9. TERMINATION}
+%\end{center}
+
+%
+%You may not copy, modify, sublicense, or distribute the Document except
+%as expressly provided for under this License.  Any other attempt to
+%copy, modify, sublicense or distribute the Document is void, and will
+%automatically terminate your rights under this License.  However,
+%parties who have received copies, or rights, from you under this
+%License will not have their licenses terminated so long as such
+%parties remain in full compliance.
+
+%
+%\begin{center}
+%{\Large\bf 10. FUTURE REVISIONS OF THIS LICENSE}
+%\addcontentsline{toc}{section}{10. FUTURE REVISIONS OF THIS LICENSE}
+%\end{center}
+
+%
+%The Free Software Foundation may publish new, revised versions
+%of the GNU Free Documentation License from time to time.  Such new
+%versions will be similar in spirit to the present version, but may
+%differ in detail to address new problems or concerns.  See
+%http://www.gnu.org/copyleft/.
+
+%Each version of the License is given a distinguishing version number.
+%If the Document specifies that a particular numbered version of this
+%License "or any later version" applies to it, you have the option of
+%following the terms and conditions either of that specified version or
+%of any later version that has been published (not as a draft) by the
+%Free Software Foundation.  If the Document does not specify a version
+%number of this License, you may choose any version ever published (not
+%as a draft) by the Free Software Foundation.
+
+%
+%\begin{center}
+%{\Large\bf ADDENDUM: How to use this License for your documents}
+%\addcontentsline{toc}{section}{ADDENDUM: How to use this License for your documents}
+%\end{center}
+
+%To use this License in a document you have written, include a copy of
+%the License in the document and put the following copyright and
+%license notices just after the title page:
+
+%\bigskip
+%\begin{quote}
+%    Copyright \copyright  YEAR  YOUR NAME.
+%    Permission is granted to copy, distribute and/or modify this document
+%    under the terms of the GNU Free Documentation License, Version 1.2
+%    or any later version published by the Free Software Foundation;
+%    with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+%    A copy of the license is included in the section entitled "GNU
+%    Free Documentation License".
+%\end{quote}
+%\bigskip
+%    
+%If you have Invariant Sections, Front-Cover Texts and Back-Cover Texts,
+%replace the "with...Texts." line with this:
+
+%\bigskip
+%\begin{quote}
+%    with the Invariant Sections being LIST THEIR TITLES, with the
+%    Front-Cover Texts being LIST, and with the Back-Cover Texts being LIST.
+%\end{quote}
+%\bigskip
+%    
+%If you have Invariant Sections without Cover Texts, or some other
+%combination of the three, merge those two alternatives to suit the
+%situation.
+
+%If your document contains nontrivial examples of program code, we
+%recommend releasing these examples in parallel under your choice of
+%free software license, such as the GNU General Public License,
+%to permit their use in free software.
+
+
+\end{document}

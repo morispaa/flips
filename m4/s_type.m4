@@ -1,0 +1,7 @@
+define(`FOBTYPE',flips_s)
+define(`PRECISION',sp)
+define(`DTYPE',real)
+define(`ETYPE',s)
+define(`DBLTYPE',.FALSE.)
+define(`CPLTYPE',.FALSE.)
+define(`M4_REAL')

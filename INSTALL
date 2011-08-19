@@ -1,0 +1,64 @@
+These are very Q'n'D instructions for building FLIPS module/library.
+
+
+
+IMPORTANT NOTICE TO MAC OS X USERS!
+-----------------------------------
+
+Mac OS 10.5 (Leopard) ships with version 1.4.6 of the macro processor m4 which is buggy! In order to be able to compile FLIPS in Mac OS X platform
+it is necessary to update m4 to the version (at least) 1.4.11 (also 1.4.9 will work, but then again 1.4.10 is not functioning properly in OS X. Go figure.).
+
+Sources of m4 can be obtained from GNU site:
+
+	http://ftp.gnu.org/gnu/m4/
+
+and the building & installation goes through with the standard GNU CMSMI (configure && make && sudo make install) procedure.
+
+In any reasonable modern Linux system there should be no problem.
+
+In Windows systems... Well, I have no idea. Sorry.
+
+
+
+Building FLIPS
+--------------
+
+There is a basic configure script, so you could try it first, i.e.,
+
+./configure
+make
+
+The file Make.defs contains all flags required by make, so you can modify it if
+necessary.
+
+If the configure script fails for some reason, try to modify the file Make.defs by yourself and build FLIPS by giving command
+
+make
+
+See FLIPS Manual (doc/flipsMan.pdf) for more information.
+
+
+Building and installing FLIPS interfaces for R and/or MATLAB
+------------------------------------------------------------
+
+Compile flipseng (FLIPS Engine) using command
+
+make flipseng
+
+AFTER you have built FLIPS module and library/object file (above).
+
+See interfaces/FLIPS_interfaces_README for installation instructions.
+
+
+Building FLIPS test programs
+----------------------------
+
+You can find a mixed bunch of test programs in directory tests. See tests/README.
+
+
+
+If you have problems and/or questions, or you find bugs in FLIPS, do not hesitate to mail me!
+
+
+Mikko Orispaa
+<mikko.orispaa@oulu.fi>

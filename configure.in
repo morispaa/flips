@@ -1,0 +1,82 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT(flips, 1.0.0, morispaa@oulu.fi)
+
+AC_CONFIG_SRCDIR([modules/flips.m4])
+
+AC_CANONICAL_HOST
+AC_CANONICAL_TARGET
+
+# Checks for programs.
+AC_PROG_CC
+AC_PROG_CXX
+AC_PROG_FC
+AC_PROG_RANLIB
+AC_FC_WRAPPERS
+
+FCPP="cpp -P -Wtraditional"
+AC_SUBST(FCPP)
+
+case $FC in
+	g95 | xlf* | gfortran | ifort)
+	   CPPFLAGS="-DF2003_STREAM"
+	   M4FLAGS="-DF2003_STREAM"
+	;;
+	*)
+	   CPPFLAGS="-DDIRECT"
+           M4FLAGS="-DDIRECT"
+	;;
+esac
+
+case $FC in
+	xlf*)
+		FCFLAGS="-O5 -qunroll -qhot=arraypad -qhot=vector -qipa=level=2 -qxlf90=noautodealloc -qsuffix=f=f90"
+	;;
+	g95)
+		FCFLAGS="-O3"
+	;;
+	gfortran)
+		FCFLAGS="-O3 -ftree-vectorize"
+	;;
+	ifort)
+		FCFLAGS="-O3 -assume byterecl -ip"
+	;;
+	*)
+		FCFLAGS="-O3"
+	;;
+esac
+		
+
+AC_SUBST(CPPFLAGS)
+AC_SUBST(M4FLAGS)
+
+AC_CONFIG_FILES([Make.defs])
+AC_OUTPUT
+
+AC_MSG_RESULT([
+FLIPS build options:
+  Install prefix            $prefix
+  CFLAGS                    $CFLAGS
+  CXXFLAGS                  $CXXFLAGS
+  FCFLAGS                   $FCFLAGS
+  CPPFLAGS                  $CPPFLAGS
+  M4FLAGS		            $M4FLAGS
+
+  LDFLAGS                   $LDFLAGS
+  LIBS                      $LIBS
+
+Compilers:
+  Fortran 90 compiler       $FC
+  CC                        $CC
+
+You may further tweak the options by editing Make.defs
+
+Note that some old versions of ifort and gfortran do not
+support the Stream I/O extension. If this is the case, manually
+change the option -DF2003_STREAM into -DDIRECT.
+
+Note to Mac OS X.5 (Leopard) users!
+Leopard ships with buggy m4 macro processor (version 1.4.6)! You
+need to update m4 to (at least) 1.4.11 in order to be able to
+compile FLIPS. See file INSTALL for details! 
+])
+

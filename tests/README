@@ -1,0 +1,24 @@
+FLIPS Tests Readme
+------------------
+
+ (c) 2005--2009 University of Oulu, written by Mikko Orispaa
+
+FLIPS is licensed under Gnu General Public License, version 2.
+
+
+Building
+-------
+
+FLIPS tests can be built with the command 
+
+      make all
+
+Modify the Makefile if necessary.
+
+
+FLIPS tests
+-----------
+
+HIC SUNT DRACONES!
+
+These are simple test programs for testing FLIPS. They are left here as examples. Most of them are not commented, and some of them are so old that even we do not know what they do. Sometime, in the distant future, we may write a proper test suite for FLIPS. Until then, good luck and good night.

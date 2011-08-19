@@ -1,0 +1,42 @@
+This is README for FLIPS interfaces for R and MATLAB.
+
+
+These instructions are valid for Mac OS X and *NIX systems. If you are using Windows, you are on your own _at_the_moment_. If you do not know what to do, use the precompiled binaries, if available. 
+
+There exist precompiled binary versions for these interfaces. They can be found in KavaroWiki (http://mep.fi/mediawiki/index.php/FLIPS_interfaces).
+
+Both interfaces use compiled Fortran program called "flipseng30" to do the actual FLIPS magic. 
+
+You can compile flipseng _after_ building FLIPS module by giving command
+
+	make
+	
+in FLIPS "interfaces" directory (the same directory where this file is).
+	
+Depending on the interface you are going to use, you must move/copy the resulting flipseng30 executable into suitable location (somewhere in your path, like /usr/local/bin).
+
+
+
+
+rflips (R interface for FLIPS)
+-------------------------------
+
+Move/copy "flipseng30" somewhere in your PATH. After this install the rflips package into R by giving command
+
+	sudo R CMD INSTALL rflips
+	
+in the "interfaces" directory.
+
+FLIPS interface is loaded in R by giving command "library(flips)". Help about flips can be obtained by command "help(flips)"
+
+
+
+
+m_flips (MATLAB interface for FLIPS)
+-------------------------------------
+
+Copy the folder "m_flips" somewhere where you keep your MATLAB toolboxes. Run "pathtool" in the MATLAB command line and add "m_flips" and its subfolders into the MATLAB search path.
+
+Copy the file "flipseng30" somewhere where you keep your executables. Open the file m_flips/@flips/private/flipspath.m and set the location of the executable file "flipseng30" in the variable FLIPSEngPath. Default is "/usr/local/bin", so if you copied "flipseng30" there, you do not have to make changes in the file "flipspath.m".
+
+Help can be obtained by command "help m_flips".
