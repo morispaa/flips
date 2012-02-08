@@ -1,9 +1,9 @@
 Package: rflips
-Version: 2.0.3
-Date: 2010-04-08
+Version: 2.0.8
+Date: 2012-02-08
 Title: R interface to FLIPS (Fortran Linear Inverse Problem Solver)
 Author: Mikko Orispaa <mikko.orispaa@oulu.fi>
 Maintainer: Mikko Orispaa <mikko.orispaa@oulu.fi>
-License: freeBSD license, Copyright (c) 2006-2009 University of Oulu, Finland
+License: freeBSD license, Copyright (c) 2006-2012 University of Oulu, Finland
 Description: R interface to FLIPS. Requires flipseng. 
 	flipseng must have been compiled and installed somewhere in the PATH (preferably).

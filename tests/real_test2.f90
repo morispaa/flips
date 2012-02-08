@@ -109,7 +109,7 @@ program real_test
 
            loopcnt = floor(max(1.0,1100*exp(-0.01*j)+1))
 
-write(*,*) 'loopcnt = ',loopcnt
+! write(*,*) 'loopcnt = ',loopcnt
 
            if (i==0) then
               if (prec==1) then
@@ -128,7 +128,7 @@ write(*,*) 'loopcnt = ',loopcnt
               bs = i
            end if
 
-	       write(*,'(i6,i6,f15.8,f6.3)') j,bs,t,f/t/1.0D9
+	       write(*,'(i6,i6,f15.8,f10.3)') j,bs,t,f/t/1.0D9
 	
         end do
      end do
@@ -157,7 +157,7 @@ write(*,*) 'loopcnt = ',loopcnt
            end if
 
 
-           write(*,'(i6,i6,f15.8,f6.3)') i,bs,t,f/t/1.0D9
+           write(*,'(i6,i6,f15.8,f10.3)') i,bs,t,f/t/1.0D9
 
         end do
      end do

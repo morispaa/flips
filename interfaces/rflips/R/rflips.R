@@ -725,11 +725,11 @@ flips.copy <- function(from,new.ID=NULL)
 {
 
 	## Before copying anything, make sure that all data is rotated.
-	if (e$newrows > 0)
+	if (from$newrows > 0)
 	{
 		#tmp <- e$newrows
 		#cat('Rotating\n')
-		flips.rotate(e)	
+		flips.rotate(from)	
 		#e$newrows <- tmp
 	}
 
@@ -1176,4 +1176,61 @@ flips.put.Y <- function(h,data)
 		
 	}
 	
+}
+
+
+# RFLIPS testing 
+flips.test <- function(type,size,buffersizes,loop=1)
+{
+  	ncols <- size[2]
+	rows <- size[1]
+	A<-matrix(rnorm(ncols*rows),rows,ncols)
+	sol<-rnorm(ncols)
+	if (type=='c' || type=='z')
+	{
+		A <- A + 1i*matrix(rnorm(ncols*rows),rows,ncols)
+		sol <- sol + 1i*rnorm(ncols)
+	}
+
+	m<-A%*%sol
+	
+	n<-length(buffersizes)
+	acc <- rep(0,n)
+	times <- rep(0,n)
+  	flops <- 2 * ncols**3 + 3 * ncols**2 - 5 * ncols + 6 * (rows - ncols) * ncols + 3 * (rows - ncols) * ncols * (ncols + 1)
+	
+	for(k in 1:loop)
+	{
+	  for (i in 1:n)
+	  {
+	  	ss<-flips.problem(type,A,m,buffersizes[i])
+	  	times[i] <- times[i] + ss$time[3]
+	  	acc[i] <- acc[i] + max(abs(sol - ss$sol))
+
+			
+	  }
+	}
+  
+	times <- times/loop
+	acc <- acc/loop
+  Gflops <- flops/1.0E9 / times
+	
+	return(list(times=times,accuracy=acc,Gflops=Gflops))
+}
+
+flips.problem <- function(type,A,m,bsize,wg.size)
+{
+	ncols <- ncol(A)
+	h<-flips.init(ncols,1,type)
+	tt <- proc.time()
+	flips.add(h,A,m,1)
+	flips.solve(h)
+	tt2<-proc.time()
+	#cat("LIPS time:",tt2-tt,"\n")
+	aa <- h$solution
+	flips.dispose(h)
+	#cat(' init:',t1,"\n",sep=" ")
+	#cat('  add:',t2,"\n",sep=" ")
+	#cat('solve:',t3,"\n",sep=" ")
+	return(list(sol=aa,time=tt2-tt))	
 }
