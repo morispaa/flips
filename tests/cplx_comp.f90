@@ -77,7 +77,7 @@ program realcomp
   ! Calculate diagonal of the covariance
   call cpu_time(cts)
   !call system_clock(wts)
-  call flips_calc_cov(gs,full=.FALSE.)
+  call flips_calc_cov(gs,full=.TRUE.)
   call cpu_time(cte)
   !call system_clock(wte)
   !wtime2 = wte-wts
@@ -131,7 +131,7 @@ program realcomp
   ! Calculate diagonal of the covariance
   call cpu_time(cts)
   !call system_clock(wts)
-  call flips_calc_cov(gd,full=.FALSE.)
+  call flips_calc_cov(gd,full=.TRUE.)
   call cpu_time(cte)
   !call system_clock(wte)
   !wtime2 = wte-wts

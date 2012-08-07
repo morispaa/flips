@@ -44,8 +44,8 @@
 #
 # autoconf template
 #
-FC=gfortran
+FC=ifort
 CPP=cpp -P -Wtraditional
 CPPFLAGS=-DF2003_STREAM
-FFLAGS=-O3 -ftree-vectorize
+FFLAGS=-O3 -assume byterecl -ip
 M4FLAGS=-DF2003_STREAM

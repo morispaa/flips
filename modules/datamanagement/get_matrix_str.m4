@@ -126,8 +126,8 @@ subroutine SUBRNAME (mtype,ftype,mat)
   ! Handle full covariance case (upper triangular -> full matrix)
   if (mtype=='cova' .AND. ftype%fullcov) then
      do i = 1,ftype%ncols
-        do j = 1,ftype%ncols
-           mat(j,i) = mat(i,j)
+        do j = i+1,ftype%ncols
+           mat(j,i) = ifdef(`M4_COMPLEX',`conjg') (mat(i,j))
         end do
      end do
   end if
