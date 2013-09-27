@@ -2,3 +2,5 @@ config.*
 configure*
 Make.*
 .DS_Store
+*.tar.gz
+

@@ -925,6 +925,8 @@ flips.rotate <- function(e,buffersize=100)
 
 flips.delete <- function(e,A.data,M.data,E.data=1.0,buffersize=100)
 {
+
+
 	# Rotate unrotated rows
 	if (e$newrows > 0)
 	{
@@ -952,7 +954,11 @@ flips.delete <- function(e,A.data,M.data,E.data=1.0,buffersize=100)
     if (file.exists(e$E.file)) file.remove(e$E.file)
     
 	## Update internal variables
-	e$crows <- e$crows - e$newrows
+	# 2013-09-27 (Mikko O): Fixed crows calculation
+	# There should be a check that crows is equal to ncols
+	# before attempting deletion.
+	# Maybe we should have total rows stored somewhere?
+	# e$crows <- e$crows - e$newrows
 	e$newrows <- 0   
 	
 if(e$crows > e$ncols) e$crows <- e$ncols
@@ -978,6 +984,16 @@ if(e$crows > e$ncols) e$crows <- e$ncols
 flips.get.R <- function(h)
 {
 	# Fetches target matrix R from the binary file
+	
+	# Fix 2013-09-27 (Mikko O):
+	# First rotate unrotated rows
+	if (h$newrows > 0)
+	{
+		#tmp <- e$newrows
+		#cat('Rotating\n')
+		flips.rotate(h)	
+		#e$newrows <- tmp
+	}
 	
 	if ( h$r.written)
 	{
@@ -1047,6 +1063,16 @@ flips.get.R <- function(h)
 flips.get.Y <- function(h)
 {
 	# Fetches target matrix R from the binary file
+	
+	# Fix 2013-09-27 (Mikko O):
+	# First rotate unrotated rows
+	if (h$newrows > 0)
+	{
+		#tmp <- e$newrows
+		#cat('Rotating\n')
+		flips.rotate(h)	
+		#e$newrows <- tmp
+	}
 	
 	if ( h$r.written)
 	{
@@ -1132,6 +1158,16 @@ flips.put.Y <- function(h,data)
 {
 	# Write Y into file
 	# Y can be given as a matrix or row-major ordered vector
+	
+	# Fix 2013-09-27 (Mikko O):
+	# First rotate unrotated rows
+	if (h$newrows > 0)
+	{
+		#tmp <- e$newrows
+		#cat('Rotating\n')
+		flips.rotate(h)	
+		#e$newrows <- tmp
+	}
 	
 	# Check data format
 	vData<-F
