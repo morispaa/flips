@@ -1,4 +1,5 @@
 config.*
+config.status
 configure*
 Make.*
 .DS_Store

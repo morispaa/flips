@@ -438,7 +438,7 @@ Copyright (C) 2009 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/Users/m/Development/flipsdev'
+ac_pwd='/Users/m/Development/flips'
 srcdir='.'
 test -n "$AWK" || AWK=awk
 # The default lists apply if the user does not specify any file.
@@ -588,7 +588,7 @@ S["LTLIBOBJS"]=""
 S["LIBOBJS"]=""
 S["M4FLAGS"]="-DF2003_STREAM"
 S["FCPP"]="cpp -P -Wtraditional"
-S["FCLIBS"]=" -L/opt/local/lib/gcc48/gcc/x86_64-apple-darwin12/4.8.1 -L/opt/local/lib/gcc48/gcc/x86_64-apple-darwin12/4.8.1/../../.. -lgfortran -lquadmath -lm"
+S["FCLIBS"]=" -L/opt/local/lib/gcc5/gcc/x86_64-apple-darwin15/5.2.0 -L/opt/local/lib/gcc5/gcc/x86_64-apple-darwin15/5.2.0/../../.. -lgfortran -lquadmath -lm"
 S["RANLIB"]="ranlib"
 S["ac_ct_FC"]="gfortran"
 S["FCFLAGS"]="-O3 -ftree-vectorize"
@@ -603,18 +603,18 @@ S["CPPFLAGS"]="-DF2003_STREAM"
 S["LDFLAGS"]=""
 S["CFLAGS"]="-g -O2"
 S["CC"]="gcc"
-S["target_os"]="darwin12.5.0"
+S["target_os"]="darwin15.0.0"
 S["target_vendor"]="apple"
 S["target_cpu"]="i386"
-S["target"]="i386-apple-darwin12.5.0"
-S["host_os"]="darwin12.5.0"
+S["target"]="i386-apple-darwin15.0.0"
+S["host_os"]="darwin15.0.0"
 S["host_vendor"]="apple"
 S["host_cpu"]="i386"
-S["host"]="i386-apple-darwin12.5.0"
-S["build_os"]="darwin12.5.0"
+S["host"]="i386-apple-darwin15.0.0"
+S["build_os"]="darwin15.0.0"
 S["build_vendor"]="apple"
 S["build_cpu"]="i386"
-S["build"]="i386-apple-darwin12.5.0"
+S["build"]="i386-apple-darwin15.0.0"
 S["target_alias"]=""
 S["host_alias"]=""
 S["build_alias"]=""
